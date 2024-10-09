@@ -1,0 +1,41 @@
+{
+  "name": "jsonriver",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "A JSON parser that produces increasingly complete versions of the parsed value.",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "wireit",
+    "test": "wireit"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^22.7.5",
+    "typescript": "^5.6.3",
+    "wireit": "^0.14.9"
+  },
+  "wireit": {
+    "build": {
+      "files": [
+        "src/**/*.ts",
+        "tsconfig.json"
+      ],
+      "output": [
+        "dist"
+      ],
+      "command": "tsc"
+    },
+    "test": {
+      "dependencies": ["build"],
+      "command": "node --test dist/test/*.js"
+    }
+  }
+}
