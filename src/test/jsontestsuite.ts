@@ -63,13 +63,6 @@ suite("matching JSON.parse", () => {
   }
 
   for (const testName of jsonTestSuiteTests) {
-    // We hit stack size limits on these tests in some engines.
-    if (
-      testName === "n_structure_100000_opening_arrays.json" ||
-      testName === "n_structure_open_array_object.json"
-    ) {
-      continue;
-    }
     test(testName, async () => {
       const json = fs.readFileSync(path.join(testDir, testName), "utf8");
       await assertBehaviorMatches(testName, json);

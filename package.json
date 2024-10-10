@@ -34,8 +34,10 @@
       "command": "tsc"
     },
     "test": {
-      "dependencies": ["build"],
-      "command": "node --test dist/test/*.js"
+      "dependencies": [
+        "build"
+      ],
+      "command": "node --test --test-reporter=spec dist/test/*.js"
     }
   }
 }
