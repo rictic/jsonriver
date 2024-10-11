@@ -14,11 +14,11 @@ async function* makeStream(...chunks: string[]): AsyncIterable<string> {
   }
 }
 
-async function toArray<T>(iter: AsyncIterable<T>): Promise<T[]> {
+async function toArray<T>(iter: AsyncIterable<T[]>): Promise<T[]> {
   const result: T[] = [];
   try {
     for await (const item of iter) {
-      result.push(item);
+      result.push(...item);
     }
   } catch (e) {
     throw new Error(
@@ -29,7 +29,6 @@ async function toArray<T>(iter: AsyncIterable<T>): Promise<T[]> {
   }
   return result;
 }
-
 
 suite("tokenizeJsonStream", () => {
   test("can tokenize null", async () => {
@@ -72,6 +71,12 @@ suite("tokenizeJsonStream", () => {
   test("can tokenize a string with one character", async () => {
     const tokens = tokenize(makeStream('"a"'));
     assert.deepEqual(await toArray(tokens), [
+      { type: JsonTokenType.String, value: "a" },
+    ]);
+  });
+  test("can tokenize a chunked string", async () => {
+    const tokens = tokenize(makeStream('"', "a", '"'));
+    assert.deepEqual(await toArray(tokens), [
       { type: JsonTokenType.StringStart, value: undefined },
       { type: JsonTokenType.StringMiddle, value: "a" },
       { type: JsonTokenType.StringEnd, value: undefined },
@@ -87,17 +92,9 @@ suite("tokenizeJsonStream", () => {
     ]);
   });
   test("can tokenize a string with escapes", async () => {
-    const tokens = tokenize(
-      makeStream(JSON.stringify('"\\\n\u2028\t'))
-    );
+    const tokens = tokenize(makeStream(JSON.stringify('"\\\n\u2028\t')));
     assert.deepEqual(await toArray(tokens), [
-      { type: JsonTokenType.StringStart, value: undefined },
-      { type: JsonTokenType.StringMiddle, value: '"' },
-      { type: JsonTokenType.StringMiddle, value: "\\" },
-      { type: JsonTokenType.StringMiddle, value: "\n" },
-      { type: JsonTokenType.StringMiddle, value: "\u2028" },
-      { type: JsonTokenType.StringMiddle, value: "\t" },
-      { type: JsonTokenType.StringEnd, value: undefined },
+      { type: JsonTokenType.String, value: '"\\\n\u2028\t' },
     ]);
   });
   test("can tokenize an empty object", async () => {
@@ -111,9 +108,7 @@ suite("tokenizeJsonStream", () => {
     const tokens = tokenize(makeStream('{"a": null}'));
     assert.deepEqual(await toArray(tokens), [
       { type: JsonTokenType.ObjectStart, value: undefined },
-      { type: JsonTokenType.StringStart, value: undefined },
-      { type: JsonTokenType.StringMiddle, value: "a" },
-      { type: JsonTokenType.StringEnd, value: undefined },
+      { type: JsonTokenType.String, value: "a" },
       { type: JsonTokenType.Null, value: undefined },
       { type: JsonTokenType.ObjectEnd, value: undefined },
     ]);
@@ -122,13 +117,9 @@ suite("tokenizeJsonStream", () => {
     const tokens = tokenize(makeStream('{"a": null, "b": true}'));
     assert.deepEqual(await toArray(tokens), [
       { type: JsonTokenType.ObjectStart, value: undefined },
-      { type: JsonTokenType.StringStart, value: undefined },
-      { type: JsonTokenType.StringMiddle, value: "a" },
-      { type: JsonTokenType.StringEnd, value: undefined },
+      { type: JsonTokenType.String, value: "a" },
       { type: JsonTokenType.Null, value: undefined },
-      { type: JsonTokenType.StringStart, value: undefined },
-      { type: JsonTokenType.StringMiddle, value: "b" },
-      { type: JsonTokenType.StringEnd, value: undefined },
+      { type: JsonTokenType.String, value: "b" },
       { type: JsonTokenType.Boolean, value: true },
       { type: JsonTokenType.ObjectEnd, value: undefined },
     ]);
@@ -140,4 +131,3 @@ suite("tokenizeJsonStream", () => {
     ]);
   });
 });
-

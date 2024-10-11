@@ -11,96 +11,429 @@
  */
 export async function* tokenize(
   stream: AsyncIterable<string>
-): AsyncIterableIterator<JsonToken> {
-  const input = new Input(stream);
-  yield* tokenizeOneValue(input);
-  await input.expectEndOfContent();
+): AsyncIterableIterator<JsonToken[]> {
+  const tokenizer = new Tokenizer(stream);
+  for await (const tokens of tokenizer) {
+    yield tokens;
+  }
 }
 
-async function* tokenizeOneValue(
-  input: Input
-): AsyncIterableIterator<JsonToken> {
-  while (true) {
-    await input.skipWhitespace();
-    if (input.tryToTake("null")) {
-      yield { type: JsonTokenType.Null, value: undefined };
+const enum State {
+  ExpectingValue,
+  InString,
+  StartArray,
+  AfterArrayValue,
+  StartObject,
+  AfterObjectKey,
+  AfterObjectValue,
+  BeforeObjectKey,
+}
+
+class Tokenizer implements AsyncIterableIterator<JsonToken[]> {
+  readonly input: Input;
+  private outputBuffer: JsonToken[] = [];
+  private stack = [State.ExpectingValue];
+  constructor(stream: AsyncIterable<string>) {
+    this.input = new Input(stream);
+  }
+
+  async next(): Promise<IteratorResult<JsonToken[], any>> {
+    while (true) {
+      const startingBufferLen = this.outputBuffer.length;
+      this.tokenizeMore();
+      if (this.outputBuffer.length > startingBufferLen) {
+        continue;
+      } else {
+        // Can't progress the parse any more.
+        // Do we have output ?
+        if (this.outputBuffer.length > 0) {
+          const tokens = this.outputBuffer;
+          this.outputBuffer = [];
+          return { done: false, value: tokens };
+        }
+        // Are we done?
+        if (this.stack.length === 0) {
+          await this.input.expectEndOfContent();
+          return { done: true, value: undefined };
+        }
+        // Gotta wait for more content
+        await this.input.tryToExpandBuffer();
+      }
+    }
+  }
+
+  private tokenizeMore() {
+    const state = this.stack[this.stack.length - 1];
+    switch (state) {
+      case State.ExpectingValue:
+        this.tokenizeValue();
+        break;
+      case State.InString:
+        this.tokenizeString();
+        break;
+      case State.StartArray:
+        this.tokenizeArrayStart();
+        break;
+      case State.AfterArrayValue:
+        this.tokenizeAfterArrayValue();
+        break;
+      case State.StartObject:
+        this.tokenizeObjectStart();
+        break;
+      case State.AfterObjectKey:
+        this.tokenizeAfterObjectKey();
+        break;
+      case State.AfterObjectValue:
+        this.tokenizeAfterObjectValue();
+        break;
+      case State.BeforeObjectKey:
+        this.tokenizeBeforeObjectKey();
+        break;
+      case undefined:
+        return;
+      default: {
+        const never: never = state;
+        throw new Error("Unreachable: " + never);
+      }
+    }
+  }
+
+  private tokenizeValue() {
+    this.input.skipPastWhitespace();
+    if (this.input.tryToTakePrefix("null")) {
+      this.outputBuffer.push({ type: JsonTokenType.Null, value: undefined });
+      this.stack.pop();
       return;
     }
-    if (input.tryToTake("true")) {
-      yield { type: JsonTokenType.Boolean, value: true };
+    if (this.input.tryToTakePrefix("true")) {
+      this.outputBuffer.push({ type: JsonTokenType.Boolean, value: true });
+      this.stack.pop();
       return;
     }
-    if (input.tryToTake("false")) {
-      yield { type: JsonTokenType.Boolean, value: false };
+    if (this.input.tryToTakePrefix("false")) {
+      this.outputBuffer.push({ type: JsonTokenType.Boolean, value: false });
+      this.stack.pop();
       return;
     }
-    if (input.tryToTake('"')) {
-      yield* tokenizeStringContents(input);
-      return;
-    }
-    if (input.tryToTake("[")) {
-      yield { type: JsonTokenType.ArrayStart, value: undefined };
-      await input.skipWhitespace();
-      const maybeClose = await input.peek(1);
-      if (maybeClose === "]") {
-        await input.take(1);
-        yield { type: JsonTokenType.ArrayEnd, value: undefined };
+    if (this.input.testBuffer(/^[\-0123456789]/)) {
+      // Slightly tricky spot, because numbers don't have a terminator,
+      // they might end on the end of input, or they might end because we hit
+      // a non-number character.
+      if (this.input.bufferComplete) {
+        const match = this.input.buffer.match(/^[\-+0123456789eE\.]+/);
+        if (!match) {
+          throw new Error("Invalid number");
+        }
+        this.input.buffer = this.input.buffer.slice(match[0].length);
+        const number = JSON.parse(match[0]) as number;
+        this.outputBuffer.push({ type: JsonTokenType.Number, value: number });
+        this.stack.pop();
+        this.input.moreContentExpected = true;
+        return;
+      } else {
+        // match up to the first non-number character
+        const match = this.input.buffer.match(/[^\-+0123456789eE\.]/);
+        if (!match) {
+          // Return to expand the buffer, but since there's no terminator
+          // for a number, we need to mark that finding the end of the input
+          // isn't a sign of failure.
+          this.input.moreContentExpected = false;
+          return;
+        }
+        const numberChars = this.input.buffer.slice(0, match.index);
+        this.input.buffer = this.input.buffer.slice(match.index);
+        const number = JSON.parse(numberChars) as number;
+        this.outputBuffer.push({ type: JsonTokenType.Number, value: number });
+        this.stack.pop();
         return;
       }
-
-      while (true) {
-        yield* tokenizeOneValue(input);
-        await input.skipWhitespace();
-        const nextChar = await input.take(1);
-        if (nextChar === "]") {
-          yield { type: JsonTokenType.ArrayEnd, value: undefined };
-          return;
-        } else if (nextChar === ",") {
-          continue;
-        } else {
-          throw new Error(
-            "Unexpected character in the middle of array: " + nextChar
-          );
-        }
-      }
     }
-    if (input.tryToTake("{")) {
-      yield { type: JsonTokenType.ObjectStart, value: undefined };
-      await input.skipWhitespace();
-      const nextChar2 = await input.peek(1);
-      if (nextChar2 === "}") {
-        await input.take(1);
-        yield { type: JsonTokenType.ObjectEnd, value: undefined };
-        return;
-      }
-
-      while (true) {
-        await input.skipWhitespace();
-        await input.matchPrefixOrDie('"');
-        yield* tokenizeStringContents(input);
-        await input.skipWhitespace();
-        await input.matchPrefixOrDie(":");
-        yield* tokenizeOneValue(input);
-        await input.skipWhitespace();
-        const nextChar = await input.take(1);
-        if (nextChar === "}") {
-          yield { type: JsonTokenType.ObjectEnd, value: undefined };
-          return;
-        } else if (nextChar === ",") {
-          continue;
-        } else {
-          throw new Error(
-            "Expected character in the middle of object: " + nextChar
-          );
-        }
-      }
-    }
-    if (input.testBuffer(/^[\-0-9]/)) {
-      yield* tokenizeNumber(input);
+    if (this.input.tryToTakePrefix('"')) {
+      this.stack.pop();
+      this.stack.push(State.InString);
+      this.outputBuffer.push({
+        type: JsonTokenType.StringStart,
+        value: undefined,
+      });
+      this.tokenizeString();
       return;
     }
+    if (this.input.tryToTakePrefix("[")) {
+      this.stack.pop();
+      this.stack.push(State.StartArray);
+      this.outputBuffer.push({
+        type: JsonTokenType.ArrayStart,
+        value: undefined,
+      });
+      return this.tokenizeArrayStart();
+    }
+    if (this.input.tryToTakePrefix("{")) {
+      this.stack.pop();
+      this.stack.push(State.StartObject);
+      this.outputBuffer.push({
+        type: JsonTokenType.ObjectStart,
+        value: undefined,
+      });
+      return this.tokenizeObjectStart();
+    }
+  }
 
-    await input.expectMoreContent();
+  private tokenizeString() {
+    const middlePart = { type: JsonTokenType.StringMiddle as const, value: "" };
+    const addToMiddlePart = (val: string) => {
+      if (middlePart.value === "") {
+        this.outputBuffer.push(middlePart);
+      }
+      middlePart.value += val;
+    };
+    while (true) {
+      const [chunk, interrupted] = this.input.takeUntil(/["\\]/);
+      if (chunk.length > 0) {
+        // A string middle can't have a control character, newline, or tab
+        if (/[\x00-\x1f]/.test(chunk)) {
+          throw new Error("Unescaped control character in string");
+        }
+        addToMiddlePart(chunk);
+      } else if (!interrupted) {
+        // We've parsed everything we can in the buffer.
+        return;
+      }
+      if (interrupted) {
+        if (this.input.buffer.length === 0) {
+          // Can't continue without more input.
+          return;
+        }
+        const nextChar = this.input.buffer[0];
+        if (nextChar === '"') {
+          this.input.buffer = this.input.buffer.slice(1);
+          // Do we have a string middle and a string end in the buffer?
+          // If so, optimize by combining them.
+          if (
+            this.outputBuffer.at(-1)?.type === JsonTokenType.StringMiddle &&
+            this.outputBuffer.at(-2)?.type === JsonTokenType.StringStart
+          ) {
+            const middle = this.outputBuffer.pop() as StringMiddleToken;
+            this.outputBuffer.pop();
+            this.outputBuffer.push({
+              type: JsonTokenType.String,
+              value: middle.value,
+            });
+          } else {
+            this.outputBuffer.push({
+              type: JsonTokenType.StringEnd,
+              value: undefined,
+            });
+          }
+          this.stack.pop();
+          return;
+        }
+        // string escapes
+        const nextChar2 = this.input.buffer[1];
+        if (nextChar2 === undefined) {
+          // Can't continue without more input.
+          return;
+        }
+        if (nextChar2 === "u") {
+          // need 4 more characters
+          if (this.input.buffer.length < 6) {
+            return;
+          }
+          const hex = this.input.buffer.slice(2, 6);
+          this.input.buffer = this.input.buffer.slice(6);
+          addToMiddlePart(JSON.parse(`"\\u${hex}"`));
+          continue;
+        } else {
+          this.input.buffer = this.input.buffer.slice(2);
+        }
+        let value;
+        switch (nextChar2) {
+          case "n": {
+            value = "\n";
+            break;
+          }
+          case "r": {
+            value = "\r";
+            break;
+          }
+          case "t": {
+            value = "\t";
+            break;
+          }
+          case "b": {
+            value = "\b";
+            break;
+          }
+          case "f": {
+            value = "\f";
+            break;
+          }
+          case `\\`: {
+            value = `\\`;
+            break;
+          }
+          case `/`: {
+            value = `/`;
+            break;
+          }
+          case '"': {
+            value = '"';
+            break;
+          }
+          default: {
+            throw new Error("Bad escape in string");
+          }
+        }
+        addToMiddlePart(value);
+      }
+    }
+  }
+
+  private tokenizeArrayStart() {
+    this.input.skipPastWhitespace();
+    if (this.input.buffer.length === 0) {
+      return;
+    }
+    if (this.input.tryToTakePrefix("]")) {
+      this.outputBuffer.push({
+        type: JsonTokenType.ArrayEnd,
+        value: undefined,
+      });
+      this.stack.pop();
+      return;
+    } else {
+      this.stack.pop();
+      this.stack.push(State.AfterArrayValue);
+      this.stack.push(State.ExpectingValue);
+      this.tokenizeValue();
+    }
+  }
+
+  private tokenizeAfterArrayValue() {
+    this.input.skipPastWhitespace();
+    const nextChar = this.input.tryToTake(1);
+    switch (nextChar) {
+      case undefined: {
+        return;
+      }
+      case "]": {
+        this.outputBuffer.push({
+          type: JsonTokenType.ArrayEnd,
+          value: undefined,
+        });
+        this.stack.pop();
+        return;
+      }
+      case ",": {
+        this.stack.push(State.ExpectingValue);
+        return this.tokenizeValue();
+      }
+      default: {
+        throw new Error("Expected , or ], got " + JSON.stringify(nextChar));
+      }
+    }
+  }
+
+  private tokenizeObjectStart() {
+    this.input.skipPastWhitespace();
+    const nextChar = this.input.tryToTake(1);
+    switch (nextChar) {
+      case undefined: {
+        return;
+      }
+      case "}": {
+        this.outputBuffer.push({
+          type: JsonTokenType.ObjectEnd,
+          value: undefined,
+        });
+        this.stack.pop();
+        return;
+      }
+      case '"': {
+        this.stack.pop();
+        this.stack.push(State.AfterObjectKey);
+        this.stack.push(State.InString);
+        this.outputBuffer.push({
+          type: JsonTokenType.StringStart,
+          value: undefined,
+        });
+        return this.tokenizeString();
+      }
+      default: {
+        throw new Error("Expected start of object key, got " + nextChar);
+      }
+    }
+  }
+
+  private tokenizeAfterObjectKey() {
+    this.input.skipPastWhitespace();
+    const nextChar = this.input.tryToTake(1);
+    switch (nextChar) {
+      case undefined: {
+        return;
+      }
+      case ":": {
+        this.stack.pop();
+        this.stack.push(State.AfterObjectValue);
+        this.stack.push(State.ExpectingValue);
+        return this.tokenizeValue();
+      }
+      default: {
+        throw new Error("Expected colon after object key, got " + nextChar);
+      }
+    }
+  }
+
+  private tokenizeAfterObjectValue() {
+    this.input.skipPastWhitespace();
+    const nextChar = this.input.tryToTake(1);
+    switch (nextChar) {
+      case undefined: {
+        return;
+      }
+      case "}": {
+        this.outputBuffer.push({
+          type: JsonTokenType.ObjectEnd,
+          value: undefined,
+        });
+        this.stack.pop();
+        return;
+      }
+      case ",": {
+        this.stack.pop();
+        this.stack.push(State.BeforeObjectKey);
+        return this.tokenizeBeforeObjectKey();
+      }
+      default: {
+        throw new Error("Expected , or } after object value, got " + nextChar);
+      }
+    }
+  }
+
+  private tokenizeBeforeObjectKey() {
+    this.input.skipPastWhitespace();
+    const nextChar = this.input.tryToTake(1);
+    switch (nextChar) {
+      case undefined: {
+        return;
+      }
+      case '"': {
+        this.stack.pop();
+        this.stack.push(State.AfterObjectKey);
+        this.stack.push(State.InString);
+        this.outputBuffer.push({
+          type: JsonTokenType.StringStart,
+          value: undefined,
+        });
+        return this.tokenizeString();
+      }
+      default: {
+        throw new Error("Expected start of object key, got " + nextChar);
+      }
+    }
+  }
+
+  [Symbol.asyncIterator]() {
+    return this;
   }
 }
 
@@ -118,6 +451,7 @@ export type JsonToken =
   | NullToken
   | BooleanToken
   | NumberToken
+  | StringToken
   | StringStartToken
   | StringMiddleToken
   | StringEndToken
@@ -126,10 +460,11 @@ export type JsonToken =
   | ObjectStartToken
   | ObjectEndToken;
 
-export enum JsonTokenType {
+export const enum JsonTokenType {
   Null,
   Boolean,
   Number,
+  String,
   StringStart,
   StringMiddle,
   StringEnd,
@@ -147,6 +482,8 @@ export function jsonTokenTypeToString(type: JsonTokenType): string {
       return "boolean";
     case JsonTokenType.Number:
       return "number";
+    case JsonTokenType.String:
+      return "string";
     case JsonTokenType.StringStart:
       return "string start";
     case JsonTokenType.StringMiddle:
@@ -174,6 +511,16 @@ export interface BooleanToken {
 export interface NumberToken {
   readonly type: JsonTokenType.Number;
   readonly value: number;
+}
+
+/**
+ * A complete string literal.
+ *
+ * Emitted when we can get the entire string in a single chunk.
+ */
+export interface StringToken {
+  readonly type: JsonTokenType.String;
+  readonly value: string;
 }
 
 /**
@@ -236,103 +583,29 @@ interface ObjectEndToken {
   value: undefined;
 }
 
-async function* tokenizeStringContents(
-  input: Input
-): AsyncIterableIterator<JsonToken> {
-  yield { type: JsonTokenType.StringStart, value: undefined };
-  while (true) {
-    const [chunk, interrupted] = input.takeUntil(/["\\]/);
-    if (chunk.length > 0) {
-      // A string middle can't have a control character, newline, or tab
-      if (/[\x00-\x1f]/.test(chunk)) {
-        throw new Error("Unescaped control character in string");
-      }
-      yield { type: JsonTokenType.StringMiddle, value: chunk };
-    } else if (!interrupted) {
-      await input.expectMoreContent();
-      continue;
-    }
-    if (interrupted) {
-      const nextChar = await input.take(1);
-      if (nextChar === '"') {
-        yield { type: JsonTokenType.StringEnd, value: undefined };
-        return;
-      }
-      // string escapes
-      const nextChar2 = await input.take(1);
-      let value;
-      switch (nextChar2) {
-        case "n": {
-          value = "\n";
-          break;
-        }
-        case "r": {
-          value = "\r";
-          break;
-        }
-        case "t": {
-          value = "\t";
-          break;
-        }
-        case "b": {
-          value = "\b";
-          break;
-        }
-        case "f": {
-          value = "\f";
-          break;
-        }
-        case "u": {
-          const hex = await input.take(4);
-          value = JSON.parse(`"\\u${hex}"`);
-          break;
-        }
-        case `\\`: {
-          value = `\\`;
-          break;
-        }
-        case `/`: {
-          value = `/`;
-          break;
-        }
-        case '"': {
-          value = '"';
-          break;
-        }
-        default: {
-          throw new Error("Bad escape in string");
-        }
-      }
-      yield { type: JsonTokenType.StringMiddle, value };
-    }
+// Wrapper around an Input that can only progress it synchronously.
+class SynchronousInput {
+  readonly input: Input;
+  constructor(input: Input) {
+    this.input = input;
   }
-}
-
-async function* tokenizeNumber(input: Input): AsyncIterableIterator<JsonToken> {
-  const str = await input.takeFullMatch(/^[\-+0123456789eE\.]+/);
-  // Easy way to match the behavior of JSON.parse is to just call it!
-  const number = JSON.parse(str) as number;
-  yield { type: JsonTokenType.Number, value: number };
 }
 
 /**
- * Our input buffer, supporting a number of peeking, taking, and skipping
- * operations.
+ * Our input buffer.
+ *
+ * This was more feature rich when we interleaved awaits while tokenizing.
+ * Now that we're doing all the work synchronously, it's a bit overkill.
  */
 class Input {
-  private buffer = "";
+  buffer = "";
+  // True if the no more content will be added to the buffer.
+  bufferComplete = false;
+  moreContentExpected = true;
   private stream: AsyncIterator<string>;
+  readonly synchronous = new SynchronousInput(this);
   constructor(stream: AsyncIterable<string>) {
     this.stream = stream[Symbol.asyncIterator]();
-  }
-
-  /** Expands the buffer. Throws if the input stream is exhausted. */
-  async expectMoreContent() {
-    const { done, value } = await this.stream.next();
-    if (done) {
-      throw new Error("Unexpected end of input");
-    }
-    this.buffer += value;
   }
 
   /**
@@ -340,6 +613,7 @@ class Input {
    * input stream.
    */
   async expectEndOfContent() {
+    this.moreContentExpected = false;
     const check = () => {
       this.buffer = this.buffer.trim();
       if (this.buffer.length !== 0) {
@@ -363,42 +637,24 @@ class Input {
   async tryToExpandBuffer() {
     const { done, value } = await this.stream.next();
     if (done) {
+      this.bufferComplete = true;
+      if (this.moreContentExpected) {
+        throw new Error("Unexpected end of content");
+      }
       return false;
     }
     this.buffer += value;
     return true;
   }
 
-  /**
-   * Skips past whitespace in the input.
-   *
-   * Once this method returns, the buffer is non-empty, and the first character
-   * is not whitespace. Throws if that's not possible.
-   */
-  async skipWhitespace() {
+  skipPastWhitespace() {
     // The only four whitespace characters in JSON are space,
     // tab, newline, and carriage return.
-    const pattern = /[^ \n\r\t]/;
-    while (true) {
-      const match = pattern.exec(this.buffer);
-      if (match) {
-        this.buffer = this.buffer.slice(match.index);
-        return;
-      }
-      await this.expectMoreContent();
+    const pattern = /^[ \n\r\t]+/;
+    const match = pattern.exec(this.buffer);
+    if (match) {
+      this.buffer = this.buffer.slice(match.index + match[0].length);
     }
-  }
-
-  /**
-   * Returns the next `len` characters in the input without consuming them.
-   *
-   * Throws if the input is exhausted before `len` characters are available.
-   */
-  async peek(len: number): Promise<string> {
-    while (this.buffer.length < len) {
-      await this.expectMoreContent();
-    }
-    return this.buffer.slice(0, len);
   }
 
   testBuffer(regex: RegExp): boolean {
@@ -408,7 +664,7 @@ class Input {
   /**
    * If the buffer starts with `prefix`, consumes it and returns true.
    */
-  tryToTake(prefix: string): boolean {
+  tryToTakePrefix(prefix: string): boolean {
     if (this.buffer.startsWith(prefix)) {
       this.buffer = this.buffer.slice(prefix.length);
       return true;
@@ -416,35 +672,13 @@ class Input {
     return false;
   }
 
-  /**
-   * Consumes and returns the next `len` characters in the input.
-   *
-   * Throws if the input is exhausted before `len` characters are available.
-   */
-  async take(len: number): Promise<string> {
-    while (this.buffer.length < len) {
-      await this.expectMoreContent();
+  tryToTake(len: number): string | undefined {
+    if (this.buffer.length < len) {
+      return undefined;
     }
     const result = this.buffer.slice(0, len);
     this.buffer = this.buffer.slice(len);
     return result;
-  }
-
-  /**
-   * Consumes the given string from the input.
-   *
-   * Throws if the input does not start with the given string.
-   */
-  async matchPrefixOrDie(prefix: string): Promise<void> {
-    while (this.buffer.length < prefix.length) {
-      await this.expectMoreContent();
-    }
-    if (!this.buffer.startsWith(prefix)) {
-      throw new Error(
-        "Expected " + prefix + " but got " + this.buffer.slice(0, prefix.length)
-      );
-    }
-    this.buffer = this.buffer.slice(prefix.length);
   }
 
   /**
@@ -465,34 +699,5 @@ class Input {
     const result = this.buffer;
     this.buffer = "";
     return [result, false];
-  }
-
-  /**
-   * Takes the longest prefix of the input that matches the given pattern.
-   *
-   * NOTE: this method is only legal to call with a RegExp that
-   * matches one or more single characters from the front of the input, like:
-   * /^[abc]+/
-   */
-  async takeFullMatch(pattern: RegExp): Promise<string> {
-    while (true) {
-      const match = this.buffer.match(pattern);
-      if (!match) {
-        await this.expectMoreContent();
-        continue;
-      }
-      // Did the pattern match the full buffer?
-      if (match[0] === this.buffer) {
-        if (await this.tryToExpandBuffer()) {
-          // we expanded the buffer, so try again with the bigger buffer
-          continue;
-        }
-        // we're at the end of the input, and it all matches
-        this.buffer = "";
-        return match[0];
-      }
-      this.buffer = this.buffer.slice(match[0].length);
-      return match[0];
-    }
   }
 }

@@ -2,7 +2,7 @@
 
 Parse JSON incrementally as it streams in, e.g. from a network request or a language model. Gives you a sequence of increasingly complete values.
 
-jsonriver is small, has no dependencies, and uses only standard features so it runs in any JS environment.
+jsonriver is small, fast, has no dependencies, and uses only standard features so it should run in any JS environment that supports ES2022 or above including browsers, NodeJS, bun, deno, etc.
 
 Usage:
 
@@ -17,7 +17,7 @@ for await (const val of vals) {
 }
 ```
 
-## Correct
+## Correctness
 
 The final value given by `parse` will be the same as if you had called `JSON.parse` on the entire string. This is tested against the JSONTestSuite, matching JSON.parse's behavior on tests of correct, incorrect, and ambiguous cases.
 

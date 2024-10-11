@@ -63,12 +63,17 @@ async function toArray<T>(iter: AsyncIterable<T>): Promise<T[]> {
 suite("parse", () => {
   test("round tripping", async () => {
     const jsonValues = [
+      {
+        a: [{ b: "" }],
+        c: "",
+      },
+
       // null
       null,
       // booleans
       true,
       false,
-      // numbers (not yet supported)
+      // numbers
       0,
       1,
       -1,
@@ -90,14 +95,19 @@ suite("parse", () => {
       { a: null },
       { a: null, b: true },
       { a: null, b: true, c: 'a b c d e\n]["\\"] f g' },
-      // nested arrays and objects
+      // // nested arrays and objects
       [[], {}],
       [{}, []],
+      { a: [] },
       { a: [], b: {} },
       { a: {}, b: [] },
       {
         a: [null, true, 'a b c d e\n]["\\"]}{}}{{}} f g'],
         b: { c: 'a b c d e\n]["\\"] f g' },
+      },
+      {
+        a: [{ b: "" }],
+        c: "",
       },
       {
         a: {
@@ -126,13 +136,17 @@ suite("parse", () => {
             }
           } catch (e) {
             throw new Error(
-              `Parsing ${json} streamed with strategy "${name}" resulted in ${
+              `Parsing ${json} streamed with strategy "${name}" and indentation ${indent} resulted in ${
                 (e as any)?.stack
               }`,
               { cause: e }
             );
           }
-          assert.deepEqual(finalValue, jsonValue);
+          assert.deepEqual(
+            finalValue,
+            jsonValue,
+            `Parsing ${json} streamed with strategy "${name}" and indentation ${indent}`
+          );
         }
       }
     }

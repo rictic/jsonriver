@@ -39,7 +39,7 @@
       "dependencies": [
         "build"
       ],
-      "command": "node --test dist/test/*.js"
+      "command": "node --test --test-reporter=spec dist/test/*.js"
     },
     "esbuild": {
       "files": [
