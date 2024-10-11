@@ -5,6 +5,7 @@
   "description": "A JSON parser that produces increasingly complete versions of the parsed value.",
   "main": "dist/index.js",
   "module": "dist/index.js",
+  "license": "BSD-3-Clause",
   "exports": {
     ".": {
       "import": "./dist/index.js"
@@ -16,9 +17,7 @@
     "benchmark": "wireit",
     "node-bench": "wireit"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": ["json", "parser", "streaming", "incremental"],
   "devDependencies": {
     "@types/node": "^22.7.5",
     "esbuild": "^0.24.0",
