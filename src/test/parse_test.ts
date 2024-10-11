@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
-import * as assert from "node:assert/strict";
-import { test, suite } from "node:test";
-import { parse } from "../index.js";
+import * as assert from 'node:assert/strict';
+import {test, suite} from 'node:test';
+import {parse} from '../index.js';
 
 async function* mapStructuralClone<T>(
-  iter: AsyncIterable<T>
+  iter: AsyncIterable<T>,
 ): AsyncIterableIterator<T> {
   for await (const val of iter) {
     yield structuredClone(val);
@@ -19,9 +19,10 @@ async function* mapStructuralClone<T>(
 function* makeStreams(val: string) {
   // The stream where we yield the entire input as one chunk
   yield {
-    name: "all at once",
+    name: 'all at once',
     stream: (async function* () {
       yield val;
+      await void 0;
     })(),
   };
 
@@ -35,13 +36,14 @@ function* makeStreams(val: string) {
 
 async function* makeStreamOfChunks(
   val: string,
-  chunkSize: number
+  chunkSize: number,
 ): AsyncIterable<string> {
   let remaining = val;
   while (remaining.length > 0) {
     yield remaining.slice(0, chunkSize);
     remaining = remaining.slice(chunkSize);
   }
+  await void 0;
 }
 
 async function toArray<T>(iter: AsyncIterable<T>): Promise<T[]> {
@@ -53,19 +55,19 @@ async function toArray<T>(iter: AsyncIterable<T>): Promise<T[]> {
   } catch (e) {
     throw new Error(
       `Error in toArray (result so far: ${JSON.stringify(result)}): ${
-        (e as any)?.stack
-      } `
+        (e as Error)?.stack
+      } `,
     );
   }
   return result;
 }
 
-suite("parse", () => {
-  test("round tripping", async () => {
+suite('parse', () => {
+  test('round tripping', async () => {
     const jsonValues = [
       {
-        a: [{ b: "" }],
-        c: "",
+        a: [{b: ''}],
+        c: '',
       },
 
       // null
@@ -81,10 +83,10 @@ suite("parse", () => {
       100e100,
 
       // strings
-      "",
-      "a",
-      "ab",
-      "a\nb",
+      '',
+      'a',
+      'ab',
+      'a\nb',
       // arrays
       [],
       [null],
@@ -92,22 +94,22 @@ suite("parse", () => {
       [null, true, 'a b c d e\n]["\\"] f g'],
       // objects
       {},
-      { a: null },
-      { a: null, b: true },
-      { a: null, b: true, c: 'a b c d e\n]["\\"] f g' },
+      {a: null},
+      {a: null, b: true},
+      {a: null, b: true, c: 'a b c d e\n]["\\"] f g'},
       // // nested arrays and objects
       [[], {}],
       [{}, []],
-      { a: [] },
-      { a: [], b: {} },
-      { a: {}, b: [] },
+      {a: []},
+      {a: [], b: {}},
+      {a: {}, b: []},
       {
         a: [null, true, 'a b c d e\n]["\\"]}{}}{{}} f g'],
-        b: { c: 'a b c d e\n]["\\"] f g' },
+        b: {c: 'a b c d e\n]["\\"] f g'},
       },
       {
-        a: [{ b: "" }],
-        c: "",
+        a: [{b: ''}],
+        c: '',
       },
       {
         a: {
@@ -116,7 +118,7 @@ suite("parse", () => {
               d: {
                 e: {
                   f: {
-                    v: { w: { x: { y: { z: null } } } },
+                    v: {w: {x: {y: {z: null}}}},
                   },
                 },
               },
@@ -128,7 +130,7 @@ suite("parse", () => {
     for (const jsonValue of jsonValues) {
       for (let indent = 0; indent < 3; indent++) {
         const json = JSON.stringify(jsonValue, null, indent);
-        for (const { name, stream } of makeStreams(json)) {
+        for (const {name, stream} of makeStreams(json)) {
           let finalValue;
           try {
             for await (const value of parse(stream)) {
@@ -137,75 +139,75 @@ suite("parse", () => {
           } catch (e) {
             throw new Error(
               `Parsing ${json} streamed with strategy "${name}" and indentation ${indent} resulted in ${
-                (e as any)?.stack
+                (e as Error)?.stack
               }`,
-              { cause: e }
+              {cause: e},
             );
           }
           assert.deepEqual(
             finalValue,
             jsonValue,
-            `Parsing ${json} streamed with strategy "${name}" and indentation ${indent}`
+            `Parsing ${json} streamed with strategy "${name}" and indentation ${indent}`,
           );
         }
       }
     }
   });
 
-  test("partial results", async () => {
+  test('partial results', async () => {
     const inputToOutputs = [
       [null, [null]],
       [true, [true]],
       [false, [false]],
-      ["abc", ["", "a", "ab", "abc"]],
+      ['abc', ['', 'a', 'ab', 'abc']],
       [[], [[]]],
       [
-        ["a", "b", "c"],
+        ['a', 'b', 'c'],
         [
           [],
-          [""],
-          ["a"],
-          ["a", ""],
-          ["a", "b"],
-          ["a", "b", ""],
-          ["a", "b", "c"],
+          [''],
+          ['a'],
+          ['a', ''],
+          ['a', 'b'],
+          ['a', 'b', ''],
+          ['a', 'b', 'c'],
         ],
       ],
       [
-        { greeting: "hi!", name: "G" },
+        {greeting: 'hi!', name: 'G'},
         [
           {},
-          { greeting: "" },
-          { greeting: "h" },
-          { greeting: "hi" },
-          { greeting: "hi!" },
-          { greeting: "hi!", name: "" },
-          { greeting: "hi!", name: "G" },
+          {greeting: ''},
+          {greeting: 'h'},
+          {greeting: 'hi'},
+          {greeting: 'hi!'},
+          {greeting: 'hi!', name: ''},
+          {greeting: 'hi!', name: 'G'},
         ],
       ],
       [
-        { a: ["a", { b: ["c"] }] },
+        {a: ['a', {b: ['c']}]},
         [
           {},
-          { a: [] },
-          { a: [""] },
-          { a: ["a"] },
-          { a: ["a", {}] },
-          { a: ["a", { b: [] }] },
-          { a: ["a", { b: [""] }] },
-          { a: ["a", { b: ["c"] }] },
+          {a: []},
+          {a: ['']},
+          {a: ['a']},
+          {a: ['a', {}]},
+          {a: ['a', {b: []}]},
+          {a: ['a', {b: ['']}]},
+          {a: ['a', {b: ['c']}]},
         ],
       ],
     ];
     for (const [val, expectedVals] of inputToOutputs) {
       const stringStream = makeStreamOfChunks(JSON.stringify(val), 1);
       const partialValues = await toArray(
-        mapStructuralClone(parse(stringStream))
+        mapStructuralClone(parse(stringStream)),
       );
       assert.deepEqual(
         partialValues,
         expectedVals as unknown,
-        `Parsing ${JSON.stringify(val)}`
+        `Parsing ${JSON.stringify(val)}`,
       );
     }
   });

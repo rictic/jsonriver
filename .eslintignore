@@ -1,5 +1,6 @@
 /dist
-/node_modules
 /.wireit
 /bench/bundles
-/.eslintcache
+/vendor
+/examples
+/bench

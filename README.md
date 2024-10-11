@@ -8,7 +8,7 @@ Usage:
 
 ```js
 // Full example at examples/fetch.js
-import { parse } from "jsonriver";
+import {parse} from 'jsonriver';
 
 const response = await fetch(`https://jsonplaceholder.typicode.com/posts`);
 const vals = parse(response.body);
@@ -22,7 +22,7 @@ for await (const val of vals) {
 What does it mean that we give you a sequence of increasingly complete values? Consider this JSON:
 
 ```json
-{"name":"Alex", "keys":[1,20,300]}
+{"name": "Alex", "keys": [1, 20, 300]}
 ```
 
 If you gave this to jsonriver one byte at a time it would yield this sequence of values:

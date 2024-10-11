@@ -9,7 +9,7 @@ import {
   jsonTokenTypeToString,
   JsonToken,
   tokenize,
-} from "./tokenize.js";
+} from './tokenize.js';
 
 /**
  * Incrementally parses a single JSON value from the given iterable of string
@@ -48,14 +48,14 @@ import {
  *    have the entire key and enough of the value to know that value's type.
  */
 export function parse(
-  stream: AsyncIterable<string>
+  stream: AsyncIterable<string>,
 ): AsyncIterableIterator<JsonValue> {
   const parser = new Parser(stream);
   return parser.parse();
 }
 
 type JsonValue = null | boolean | number | string | JsonValue[] | JsonObject;
-type JsonObject = { [key: string]: JsonValue };
+type JsonObject = {[key: string]: JsonValue};
 
 const enum StateEnum {
   Initial,
@@ -93,7 +93,7 @@ interface InObjectExpectingValueState {
 class Parser {
   private readonly tokenBuffer: JsonToken[] = [];
   private readonly stateStack: State[] = [
-    { type: StateEnum.Initial, value: undefined },
+    {type: StateEnum.Initial, value: undefined},
   ];
   private toplevelValue: JsonValue | undefined;
   private inputComplete = false;
@@ -121,7 +121,7 @@ class Parser {
       const updated = this.progress();
       if (this.toplevelValue === undefined) {
         throw new Error(
-          "Internal error: toplevelValue should not be undefined after at least one call to progress()"
+          'Internal error: toplevelValue should not be undefined after at least one call to progress()',
         );
       }
       if (updated) {
@@ -137,8 +137,8 @@ class Parser {
           if (finalToken !== undefined) {
             throw new Error(
               `Unexpected trailing content: ${jsonTokenTypeToString(
-                finalToken.type
-              )}`
+                finalToken.type,
+              )}`,
             );
           }
           await this.expandBuffer();
@@ -157,7 +157,7 @@ class Parser {
       }
       const state = this.stateStack.at(-1);
       if (state === undefined) {
-        throw new Error("Unexpected trailing input");
+        throw new Error('Unexpected trailing input');
       }
       if (!progressed) {
         switch (token.type) {
@@ -201,10 +201,10 @@ class Parser {
             default:
               throw new Error(
                 `Unexpected ${jsonTokenTypeToString(
-                  token.type
+                  token.type,
                 )} token in the middle of string starting ${JSON.stringify(
-                  state.value
-                )}`
+                  state.value,
+                )}`,
               );
           }
           const updatedString = state.value;
@@ -247,7 +247,7 @@ class Parser {
             }
             default: {
               throw new Error(
-                "Unexpected parent state for string: " + parentState?.type
+                'Unexpected parent state for string: ' + parentState?.type,
               );
             }
           }
@@ -270,7 +270,7 @@ class Parser {
             case JsonTokenType.StringStart: {
               this.stateStack.push({
                 type: StateEnum.InString,
-                value: "",
+                value: '',
               });
               break;
             }
@@ -288,8 +288,8 @@ class Parser {
             default:
               throw new Error(
                 `Unexpected ${jsonTokenTypeToString(
-                  token.type
-                )} token in the middle of object expecting key`
+                  token.type,
+                )} token in the middle of object expecting key`,
               );
           }
           break;
@@ -330,25 +330,26 @@ class Parser {
       case JsonTokenType.String:
         return token.value;
       case JsonTokenType.StringStart: {
-        const state: InStringState = { type: StateEnum.InString, value: "" };
+        const state: InStringState = {type: StateEnum.InString, value: ''};
         this.stateStack.push(state);
-        return "";
+        return '';
       }
       case JsonTokenType.ArrayStart: {
-        const state: InArrayState = { type: StateEnum.InArray, value: [] };
+        const state: InArrayState = {type: StateEnum.InArray, value: []};
         this.stateStack.push(state);
         return state.value;
       }
-      case JsonTokenType.ObjectStart:
+      case JsonTokenType.ObjectStart: {
         const state: InObjectExpectingKeyState = {
           type: StateEnum.InObjectExpectingKey,
           value: {},
         };
         this.stateStack.push(state);
         return state.value;
+      }
       default:
         throw new Error(
-          "Unexpected token type: " + jsonTokenTypeToString(token.type)
+          'Unexpected token type: ' + jsonTokenTypeToString(token.type),
         );
     }
   }

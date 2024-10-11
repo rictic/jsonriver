@@ -15,12 +15,24 @@
     "build": "wireit",
     "test": "wireit",
     "benchmark": "wireit",
-    "node-bench": "wireit"
+    "node-bench": "wireit",
+    "format": "prettier . -w",
+    "format:check": "prettier . -c",
+    "lint": "wireit"
   },
-  "keywords": ["json", "parser", "streaming", "incremental"],
+  "keywords": [
+    "json",
+    "parser",
+    "streaming",
+    "incremental"
+  ],
   "devDependencies": {
     "@types/node": "^22.7.5",
+    "@typescript-eslint/eslint-plugin": "^7.0.1",
+    "@typescript-eslint/parser": "^7.0.1",
     "esbuild": "^0.24.0",
+    "eslint": "^8.48.0",
+    "prettier": "^3.3.3",
     "stream-json": "^1.8.0",
     "tachometer": "^0.7.1",
     "typescript": "^5.6.3",
@@ -73,6 +85,20 @@
         "bench/stream-json.js"
       ],
       "command": "node bench/node-bench.js"
+    },
+    "lint": {
+      "command": "eslint --color --cache --cache-location .eslintcache .",
+      "files": [
+        ".eslintignore",
+        ".eslintrc.cjs",
+        "src/**/*.ts",
+        "tsconfig.json"
+      ],
+      "output": []
     }
+  },
+  "prettier": {
+    "singleQuote": true,
+    "bracketSpacing": false
   }
 }

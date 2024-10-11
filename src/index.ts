@@ -4,4 +4,4 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
-export { parse } from "./parse.js";
+export {parse} from './parse.js';
