@@ -1,3 +1,9 @@
+/**
+ * @license
+ * Copyright Google LLC
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 import * as nodeStream from "node:stream";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);

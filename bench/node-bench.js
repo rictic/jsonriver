@@ -1,3 +1,9 @@
+/**
+ * @license
+ * Copyright Google LLC
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 // Building stream-json such that it runs in the browser is a pain,
 // it depends on a bunch of Node built-ins and the like, so just doing a
 // simple microbenchmark here.
