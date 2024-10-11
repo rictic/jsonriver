@@ -2,7 +2,7 @@
 
 Parse JSON incrementally as it streams in, e.g. from a network request or a language model. Gives you a sequence of increasingly complete values.
 
-jsonriver is small, fast, has no dependencies, and uses only standard features so it runs in any JS environment that supports modern JS, including browsers, node, bun, deno, etc.
+jsonriver is small, fast, has no dependencies, and uses only standard features so it works without polyfills or special bundle configuration anywhere that supports ES2022.
 
 Usage:
 
@@ -17,9 +17,32 @@ for await (const val of vals) {
 }
 ```
 
+## Incremental Values
+
+What does it mean that we give you a sequence of increasingly complete values? Consider this JSON:
+
+```json
+{"name":"Alex", "keys":[1,20,300]}
+```
+
+If you gave this to jsonriver one byte at a time it would yield this sequence of values:
+
+```json
+{}
+{"name": ""}
+{"name": "A"}
+{"name": "Al"}
+{"name": "Ale"}
+{"name": "Alex"}
+{"name": "Alex", "keys": []}
+{"name": "Alex", "keys": [1]}
+{"name": "Alex", "keys": [1, 20]}
+{"name": "Alex", "keys": [1, 20, 300]}
+```
+
 ## Correctness
 
-The final value given by `parse` will be the same as if you had called `JSON.parse` on the entire string. This is tested against the JSONTestSuite, matching JSON.parse's behavior on tests of correct, incorrect, and ambiguous cases.
+The final value yielded by `parse` will be the same as if you had called `JSON.parse` on the entire string. This is tested against the JSONTestSuite, matching JSON.parse's behavior on tests of correct, incorrect, and ambiguous cases.
 
 ## Invariants
 
