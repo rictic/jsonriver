@@ -2,7 +2,7 @@
 
 Parse JSON incrementally as it streams in, e.g. from a network request or a language model. Gives you a sequence of increasingly complete values.
 
-jsonriver is small, fast, has no dependencies, and uses only standard features so it should run in any JS environment that supports ES2022 or above including browsers, NodeJS, bun, deno, etc.
+jsonriver is small, fast, has no dependencies, and uses only standard features so it runs in any JS environment that supports modern JS, including browsers, node, bun, deno, etc.
 
 Usage:
 
@@ -38,4 +38,6 @@ The final value given by `parse` will be the same as if you had called `JSON.par
 
 ## See also
 
-[stream-json](https://www.npmjs.com/package/stream-json), which is more featureful and more complex. jsonriver is simpler and smaller.
+The built-in JSON.parse is faster (~10x in simple benchmarking) if you don't need streaming.
+
+[stream-json](https://www.npmjs.com/package/stream-json), is larger, more complex, and a bit slower (~2-3x slower in simple benchmarking), but it's much more featureful, and if you only need a subset of the data it can likely be much faster.

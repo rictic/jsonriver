@@ -12,7 +12,9 @@
   },
   "scripts": {
     "build": "wireit",
-    "test": "wireit"
+    "test": "wireit",
+    "benchmark": "wireit",
+    "node-bench": "wireit"
   },
   "keywords": [],
   "author": "",
@@ -20,6 +22,7 @@
   "devDependencies": {
     "@types/node": "^22.7.5",
     "esbuild": "^0.24.0",
+    "stream-json": "^1.8.0",
     "tachometer": "^0.7.1",
     "typescript": "^5.6.3",
     "wireit": "^0.14.9"
@@ -51,10 +54,26 @@
       "command": "esbuild src/index.ts --bundle --format=esm --target=es2022 --minify --outfile=bench/bundles/bundle.min.js"
     },
     "benchmark": {
+      "#comment": "Compare jsonriver vs jsonparse in the browser",
       "dependencies": [
         "esbuild"
       ],
+      "files": [
+        "bench/jsonriver.html",
+        "bench/jsonparse.html"
+      ],
       "command": "tachometer bench/jsonriver.html bench/jsonparse.html"
+    },
+    "node-bench": {
+      "#comment": "Compare jsonriver vs stream-json in Node.js",
+      "dependencies": [
+        "esbuild"
+      ],
+      "files": [
+        "bench/node-bench.js",
+        "bench/stream-json.js"
+      ],
+      "command": "node bench/node-bench.js"
     }
   }
 }
