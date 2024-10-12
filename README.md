@@ -7,13 +7,13 @@ jsonriver is small, fast, has no dependencies, and uses only standard features s
 Usage:
 
 ```js
-// Full example at examples/fetch.js
+// Fancier example at examples/fetch.js
 import {parse} from 'jsonriver';
 
 const response = await fetch(`https://jsonplaceholder.typicode.com/posts`);
-const vals = parse(response.body);
-for await (const val of vals) {
-  renderer.render(posts);
+const stream = response.body.pipeThrough(new TextDecoderStream());
+for await (const posts of parse(stream)) {
+  console.log(posts.length);
 }
 ```
 
@@ -44,7 +44,11 @@ If you gave this to jsonriver one byte at a time it would yield this sequence of
 
 The final value yielded by `parse` will be the same as if you had called `JSON.parse` on the entire string. This is tested against the JSONTestSuite, matching JSON.parse's behavior on tests of correct, incorrect, and ambiguous cases.
 
-## Invariants
+## Guarantees
+
+Informally, jsonriver modifies the values it's building by adding the newly parsed content onto the end, and lets you know when it's been updated by yielding it. Arrays and objects are mutated in place, strings are replaced, and other values are only yielded when they're complete.
+
+More formally, we maintain the following invariants:
 
 1.  Subsequent versions of a value will have the same type. i.e. we will never
     yield a value as a string and then later replace it with an array.

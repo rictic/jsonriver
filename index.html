@@ -1,0 +1,165 @@
+<style>
+  body {
+    font-family: sans-serif;
+    max-width: 40em;
+    margin: 0 auto;
+    padding: 1em;
+  }
+  /* A scrollable region of limited height */
+  #fetch-output {
+    margin-top: 1em;
+    height: 20em;
+    overflow-y: auto;
+  }
+  #llm-output {
+    margin-top: 1em;
+    min-height: 30em;
+  }
+  #llm-input {
+    width: 35em;
+  }
+</style>
+<h1>jsonriver</h1>
+
+<p>
+  jsonriver is a simple JS library that will parse JSON incrementally as it
+  streams in, e.g. from a network request or a language model. It gives you a
+  sequence of increasingly complete values.
+</p>
+
+<p>
+  jsonriver is small (~2.5KiB gzipped), fast, has no dependencies, and uses only
+  standard features so it works without polyfills or special bundle
+  configuration anywhere that supports ES2022, including here in your browser.
+</p>
+
+<p>
+  It's fully spec-compliant, the final output is guaranteed to be the same as
+  parsing with JSON.parse.
+</p>
+
+<p>What use is a streaming parse? Let's see a couple of examples.</p>
+
+<h2>Example 1: Streaming JSON from a network request</h2>
+
+<p>Note: the network has been artificially slowed for this demo.</p>
+
+<div>
+  <button id="fetch">Load</button><button id="stop" hidden>Stop</button>
+</div>
+
+<h2>Posts</h2>
+<div id="fetch-output"></div>
+
+<script type="module">
+  import {parse} from './jsonriver.js';
+  import {html, render} from './lit.js';
+  const fetchButton = document.querySelector('button#fetch');
+  const fetchOutput = document.querySelector('#fetch-output');
+  const stopButton = document.querySelector('#stop');
+  console.log(fetchButton, fetchOutput);
+  let abortController = new AbortController();
+  fetchButton.addEventListener('click', async () => {
+    abortController.abort('Restarted');
+    abortController = new AbortController();
+    const signal = abortController.signal;
+    stopButton.hidden = false;
+    const response = await fetch(`https://jsonplaceholder.typicode.com/posts`);
+    const decoded = response.body.pipeThrough(new TextDecoderStream());
+    const delayed = delay(decoded, 3); // adds fake latency, to simulate a slow network
+    const postsStream = parse(delayed);
+
+    for await (const posts of postsStream) {
+      signal.throwIfAborted();
+      render(
+        html`
+          <h3>Posts</h3>
+          ${posts.map(
+            (post, i) =>
+              html`<h4>${i + 1}. ${post.title}</h4>
+                <p>${post.body}</p>`,
+          )}
+        `,
+        fetchOutput,
+      );
+      // smooth scroll fetchOutput to the bottom
+      fetchOutput.scrollTop = fetchOutput.scrollHeight;
+    }
+
+    async function* delay(stream, windowSize = 1) {
+      for await (const chunk of stream) {
+        for (let i = 0; i < chunk.length; i += windowSize) {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+          yield chunk.slice(i, i + windowSize);
+        }
+      }
+    }
+    stopButton.hidden = true;
+  });
+  stopButton.addEventListener('click', () => {
+    abortController.abort('Stopped');
+    stopButton.hidden = true;
+  });
+</script>
+
+<h2>Example 2: Streaming JSON from a language model by asking it nicely</h2>
+
+<p>
+  JSON is a common format for getting structured information out of a language
+  model, and it takes long enough to generate that you can give a better user
+  experience by handling it incrementally.
+</p>
+
+<p></p>
+
+<div>
+  <input
+    id="llm-input"
+    type="text"
+    placeholder="What are the top five movies about time travel?"
+  />
+  <button id="ask">Ask</button>
+</div>
+
+<div id="llm-output"></div>
+
+<script type="module">
+  import {makeLlmRequest} from './llm.js';
+  import {html, render} from './lit.js';
+  const input = document.querySelector('#llm-input');
+  const askButton = document.querySelector('#ask');
+  const llmOutput = document.querySelector('#llm-output');
+  let llmAbortController = new AbortController();
+  async function askAndStreamOutput() {
+    llmAbortController.abort();
+    llmAbortController = new AbortController();
+    const signal = llmAbortController.signal;
+    const requestText =
+      input.value || `What are the top five movies about time travel?`;
+    const request = makeLlmRequest(requestText, signal);
+    for await (const response of request) {
+      signal.throwIfAborted();
+      render(
+        html`
+          <h3>You asked:</h3>
+          <p>"${requestText}"</p>
+          <h3>Response</h3>
+          ${response.map(
+            (r) =>
+              html`<h4>${r.heading}</h4>
+                <p>${r.body}</p>`,
+          )}
+        `,
+        llmOutput,
+      );
+      // smooth scroll llmOutput to the bottom
+      llmOutput.scrollTop = llmOutput.scrollHeight;
+    }
+  }
+  askButton.addEventListener('click', askAndStreamOutput);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      askAndStreamOutput();
+    }
+  });
+</script>

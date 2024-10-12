@@ -12,13 +12,9 @@
     }
   },
   "scripts": {
-    "build": "wireit",
-    "test": "wireit",
-    "benchmark": "wireit",
-    "node-bench": "wireit",
+    "start": "wds --watch",
     "format": "prettier . -w",
-    "format:check": "prettier . -c",
-    "lint": "wireit"
+    "format:check": "prettier . -c"
   },
   "keywords": [
     "json",
@@ -30,6 +26,7 @@
     "@types/node": "^22.7.5",
     "@typescript-eslint/eslint-plugin": "^7.0.1",
     "@typescript-eslint/parser": "^7.0.1",
+    "@web/dev-server": "^0.4.6",
     "esbuild": "^0.24.0",
     "eslint": "^8.48.0",
     "prettier": "^3.3.3",
@@ -37,65 +34,6 @@
     "tachometer": "^0.7.1",
     "typescript": "^5.6.3",
     "wireit": "^0.14.9"
-  },
-  "wireit": {
-    "build": {
-      "files": [
-        "src/**/*.ts",
-        "tsconfig.json"
-      ],
-      "output": [
-        "dist"
-      ],
-      "command": "tsc"
-    },
-    "test": {
-      "dependencies": [
-        "build"
-      ],
-      "command": "node --test --test-reporter=spec dist/test/*.js"
-    },
-    "esbuild": {
-      "files": [
-        "src/**/*.ts"
-      ],
-      "output": [
-        "bench/bundles/bundle.min.js"
-      ],
-      "command": "esbuild src/index.ts --bundle --format=esm --target=es2022 --minify --outfile=bench/bundles/bundle.min.js"
-    },
-    "benchmark": {
-      "#comment": "Compare jsonriver vs jsonparse in the browser",
-      "dependencies": [
-        "esbuild"
-      ],
-      "files": [
-        "bench/jsonriver.html",
-        "bench/jsonparse.html"
-      ],
-      "command": "tachometer bench/jsonriver.html bench/jsonparse.html"
-    },
-    "node-bench": {
-      "#comment": "Compare jsonriver vs stream-json in Node.js",
-      "dependencies": [
-        "esbuild"
-      ],
-      "files": [
-        "bench/node-bench.js",
-        "bench/stream-json.js"
-      ],
-      "command": "node bench/node-bench.js"
-    },
-    "lint": {
-      "command": "eslint --color --cache --cache-location .eslintcache .",
-      "files": [
-        ".eslintignore",
-        ".eslintrc.cjs",
-        "src/**/*.ts",
-        "tsconfig.json"
-      ],
-      "output": []
-    }
   },
   "prettier": {
     "singleQuote": true,
