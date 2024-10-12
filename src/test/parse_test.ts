@@ -13,6 +13,8 @@ import {
   makeStreamOfChunks,
   toArray,
 } from './utils.js';
+import {readFileSync} from 'node:fs';
+import {join} from 'node:path';
 
 async function* mapStructuralClone<T>(
   iter: AsyncIterable<T>,
@@ -98,13 +100,29 @@ suite('parse', () => {
     // a string literal directly, and when decoded using a u escape.
     for (let i = 0; i <= 0xffff; i++) {
       const charcodeStr = String.fromCharCode(i);
-      await assertRoundTrips(charcodeStr);
-      await assertSameAsJsonParse('odd string', `"${charcodeStr}"`, undefined);
       await assertSameAsJsonParse(
-        'odd string',
+        `string literal with ${i}th character`,
+        `"${charcodeStr}"`,
+        undefined,
+      );
+      await assertSameAsJsonParse(
+        `\\u escape with ${i}th character`,
         `"\\u${i.toString(16).padStart(4, '0')}"`,
         undefined,
       );
+    }
+  });
+
+  test('first 64k values', async () => {
+    // Generated with my FEAT based reverse parser.
+    const jsonVals = readFileSync(
+      join(import.meta.filename, '../../../src/test/jsonhead.txt'),
+      'utf-8',
+    )
+      .trim()
+      .split('\n');
+    for (const str of jsonVals) {
+      await assertSameAsJsonParse(str, str, true);
     }
   });
 
