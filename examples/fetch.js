@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
-import { parse } from "jsonriver";
+import {parse} from 'jsonriver';
 
 class Renderer {
   prevEnd = 0;
@@ -16,7 +16,7 @@ class Renderer {
         // We haven't gotten any of the title yet, skip it.
         continue;
       }
-      process.stdout.write(first ? "\r" : "\n");
+      process.stdout.write(first ? '\r' : '\n');
       process.stdout.write(`${post.id}: ${post.title}`);
       first = false;
       this.prevEnd = i;
@@ -36,7 +36,7 @@ for await (const posts of postsStream) {
   // first results immediately before the rest of the data has even arrived.
   renderer.render(posts);
 }
-process.stdout.write("\n");
+process.stdout.write('\n');
 
 async function* delay(stream) {
   for await (const chunk of stream) {

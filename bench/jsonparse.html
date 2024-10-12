@@ -4,8 +4,8 @@
    * Copyright Google LLC
    * SPDX-License-Identifier: BSD-3-Clause
    */
-  import * as bench from "/bench.js";
-  import { smallJsonString } from "./data.js";
+  import * as bench from '/bench.js';
+  import {smallJsonString} from './data.js';
   bench.start();
   for (let i = 0; i < 100; i++) {
     await JSON.parse(smallJsonString);

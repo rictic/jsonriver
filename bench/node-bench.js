@@ -8,24 +8,24 @@
 // it depends on a bunch of Node built-ins and the like, so just doing a
 // simple microbenchmark here.
 
-import { streamJsonParser } from "./stream-json.js";
-import { parse } from "./bundles/bundle.min.js";
-import { parse as unoptimizedParse } from "./bundles/baseline.min.js";
-import * as fs from "node:fs";
-import * as path from "node:path";
+import {streamJsonParser} from './stream-json.js';
+import {parse} from './bundles/bundle.min.js';
+import {parse as unoptimizedParse} from './bundles/baseline.min.js';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 
-const dirname = new URL(".", import.meta.url).pathname;
+const dirname = new URL('.', import.meta.url).pathname;
 const smallJsonString = fs.readFileSync(
   path.join(dirname, `../vendor/testdata/small-file.json`),
-  { encoding: "utf-8" }
+  {encoding: 'utf-8'},
 );
 const mediumJsonString = fs.readFileSync(
   path.join(dirname, `../vendor/testdata/medium-file.json`),
-  { encoding: "utf-8" }
+  {encoding: 'utf-8'},
 );
 const largeJsonString = fs.readFileSync(
   path.join(dirname, `../vendor/testdata/large-file.json`),
-  { encoding: "utf-8" }
+  {encoding: 'utf-8'},
 );
 
 async function* toStream(str) {
@@ -48,19 +48,19 @@ async function jsonParseOld(jsonString) {
 
 const comparisons = [
   {
-    name: "jsonriver",
+    name: 'jsonriver',
     parse: jsonParse,
   },
   {
-    name: "jsonriver v0.1",
+    name: 'jsonriver v0.1',
     parse: jsonParseOld,
   },
   {
-    name: "stream-json",
+    name: 'stream-json',
     parse: streamJsonParser,
   },
   {
-    name: "JSON.parse",
+    name: 'JSON.parse',
     parse: JSON.parse,
   },
 ];
@@ -89,19 +89,19 @@ async function benchmarkFile(comparisons, str, name, numTimes) {
   console.log(`Parsing ${name} averaged over ${numTimes} runs`);
   for (let i = 0; i < comparisons.length; i++) {
     console.log(
-      `  ${comparisons[i].name.padEnd(15, " ")} ${mean(times[i])
+      `  ${comparisons[i].name.padEnd(15, ' ')} ${mean(times[i])
         .toFixed(3)
-        .padStart(10, " ")}ms ±${stdDev(times[i]).toFixed(2)}ms`
+        .padStart(10, ' ')}ms ±${stdDev(times[i]).toFixed(2)}ms`,
     );
   }
-  console.log("\n");
+  console.log('\n');
 }
 
-await benchmarkFile(comparisons, smallJsonString, "a small file (64KiB)", 100);
+await benchmarkFile(comparisons, smallJsonString, 'a small file (64KiB)', 100);
 await benchmarkFile(
   comparisons,
   mediumJsonString,
-  "a medium file (1.4MiB)",
-  100
+  'a medium file (1.4MiB)',
+  100,
 );
-await benchmarkFile(comparisons, largeJsonString, "a large file (25MiB)", 3);
+await benchmarkFile(comparisons, largeJsonString, 'a large file (25MiB)', 3);

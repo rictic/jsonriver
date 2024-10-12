@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
-import * as nodeStream from "node:stream";
-import { createRequire } from "node:module";
+import * as nodeStream from 'node:stream';
+import {createRequire} from 'node:module';
 const require = createRequire(import.meta.url);
-const { chain } = require("stream-chain");
-const { parser } = require("stream-json");
-const Asm = require("stream-json/Assembler");
+const {chain} = require('stream-chain');
+const {parser} = require('stream-json');
+const Asm = require('stream-json/Assembler');
 
 export async function streamJsonParser(str) {
   // create a node stream with just str
@@ -21,6 +21,6 @@ export async function streamJsonParser(str) {
     resolve = r;
   });
   const asm = Asm.connectTo(chain([stream, parser()]));
-  asm.on("done", (asm) => resolve(asm.current));
+  asm.on('done', (asm) => resolve(asm.current));
   return promise;
 }
