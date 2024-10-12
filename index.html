@@ -71,7 +71,6 @@
   const fetchButton = document.querySelector('button#fetch');
   const fetchOutput = document.querySelector('#fetch-output');
   const stopButton = document.querySelector('#stop');
-  console.log(fetchButton, fetchOutput);
   let abortController = new AbortController();
   fetchButton.addEventListener('click', async () => {
     abortController.abort('Restarted');
