@@ -7,6 +7,12 @@
 import * as assert from 'node:assert/strict';
 import {test, suite} from 'node:test';
 import {parse} from '../index.js';
+import {
+  assertRoundTrips,
+  assertSameAsJsonParse,
+  makeStreamOfChunks,
+  toArray,
+} from './utils.js';
 
 async function* mapStructuralClone<T>(
   iter: AsyncIterable<T>,
@@ -14,52 +20,6 @@ async function* mapStructuralClone<T>(
   for await (const val of iter) {
     yield structuredClone(val);
   }
-}
-
-function* makeStreams(val: string) {
-  // The stream where we yield the entire input as one chunk
-  yield {
-    name: 'all at once',
-    stream: (async function* () {
-      yield val;
-      await void 0;
-    })(),
-  };
-
-  for (let chunkSize = 1; chunkSize < val.length; chunkSize++) {
-    yield {
-      name: `chunksize ${chunkSize}`,
-      stream: makeStreamOfChunks(val, chunkSize),
-    };
-  }
-}
-
-async function* makeStreamOfChunks(
-  val: string,
-  chunkSize: number,
-): AsyncIterable<string> {
-  let remaining = val;
-  while (remaining.length > 0) {
-    yield remaining.slice(0, chunkSize);
-    remaining = remaining.slice(chunkSize);
-  }
-  await void 0;
-}
-
-async function toArray<T>(iter: AsyncIterable<T>): Promise<T[]> {
-  const result: T[] = [];
-  try {
-    for await (const item of iter) {
-      result.push(item);
-    }
-  } catch (e) {
-    throw new Error(
-      `Error in toArray (result so far: ${JSON.stringify(result)}): ${
-        (e as Error)?.stack
-      } `,
-    );
-  }
-  return result;
 }
 
 suite('parse', () => {
@@ -128,29 +88,23 @@ suite('parse', () => {
       },
     ] as const;
     for (const jsonValue of jsonValues) {
-      for (let indent = 0; indent < 3; indent++) {
-        const json = JSON.stringify(jsonValue, null, indent);
-        for (const {name, stream} of makeStreams(json)) {
-          let finalValue;
-          try {
-            for await (const value of parse(stream)) {
-              finalValue = value;
-            }
-          } catch (e) {
-            throw new Error(
-              `Parsing ${json} streamed with strategy "${name}" and indentation ${indent} resulted in ${
-                (e as Error)?.stack
-              }`,
-              {cause: e},
-            );
-          }
-          assert.deepEqual(
-            finalValue,
-            jsonValue,
-            `Parsing ${json} streamed with strategy "${name}" and indentation ${indent}`,
-          );
-        }
-      }
+      await assertRoundTrips(jsonValue);
+    }
+  });
+
+  test('first 64k characters behave properly', async () => {
+    // For the first 64Ki characters, check that they round trip,
+    // and that they're treated the same as JSON.parse when inserted in
+    // a string literal directly, and when decoded using a u escape.
+    for (let i = 0; i <= 0xffff; i++) {
+      const charcodeStr = String.fromCharCode(i);
+      await assertRoundTrips(charcodeStr);
+      await assertSameAsJsonParse('odd string', `"${charcodeStr}"`, undefined);
+      await assertSameAsJsonParse(
+        'odd string',
+        `"\\u${i.toString(16).padStart(4, '0')}"`,
+        undefined,
+      );
     }
   });
 
