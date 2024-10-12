@@ -59,7 +59,10 @@ Assistant: [
     "heading": "Grandma Mazur (\"One for the Money\")",
     "body": "Grandma Mazur is a character from Janet Evanovich's Stephanie Plum novel series, who appeared in the film adaptation \"One for the Money.\" In her 70s, Grandma Mazur is anything but a typical grandmother. She's fond of attending funeral viewings for entertainment, carries a .45 caliber handgun in her purse, and often provides comic relief with her inappropriate comments and actions. In the books, she lives with Stephanie's parents and often drives her son-in-law to distraction. While the film wasn't as successful as fans hoped, Debbie Reynolds' portrayal captured Grandma Mazur's spirited and unconventional nature."
   }
-]`,
+]
+
+No matter what kind of question the user asks, always return a JSON array, with objects that have a 'heading' and a 'body'. It's ok to be silly, or strange, and to really stretch what the user is asking for in order to turn it into a list. This is just for a simple demo site, so the output doesn't matter too much. Have fun!
+`,
           },
           {
             role: 'user',

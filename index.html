@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <meta charset="utf-8" />
 <title>jsonriver - a streaming JSON parser</title>
 <style>
@@ -140,23 +140,40 @@
     const requestText =
       input.value || `What are the top five movies about time travel?`;
     const request = makeLlmRequest(requestText, signal);
-    for await (const response of request) {
-      signal.throwIfAborted();
+    try {
+      for await (const response of request) {
+        signal.throwIfAborted();
+        render(
+          html`
+            <h3>You asked:</h3>
+            <p>"${requestText}"</p>
+            <h3>Response</h3>
+            ${response.map(
+              (r) =>
+                html`<h4>${r.heading}</h4>
+                  <p>${r.body}</p>`,
+            )}
+          `,
+          llmOutput,
+        );
+        // smooth scroll llmOutput to the bottom
+        llmOutput.scrollTop = llmOutput.scrollHeight;
+      }
+    } catch (e) {
+      // If the request is aborted, don't show an error
+      if (e.name === 'AbortError') return;
+
       render(
         html`
-          <h3>You asked:</h3>
-          <p>"${requestText}"</p>
-          <h3>Response</h3>
-          ${response.map(
-            (r) =>
-              html`<h4>${r.heading}</h4>
-                <p>${r.body}</p>`,
-          )}
+          <h3>Error</h3>
+          <p>${e.message}</p>
+          <p>
+            Sometimes, if a question touches on sensitive subjects, the model
+            won't return JSON. It's silly, but it happens.
+          </p>
         `,
         llmOutput,
       );
-      // smooth scroll llmOutput to the bottom
-      llmOutput.scrollTop = llmOutput.scrollHeight;
     }
   }
   askButton.addEventListener('click', askAndStreamOutput);
