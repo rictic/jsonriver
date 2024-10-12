@@ -143,7 +143,6 @@ async function* getLlmOutput(response) {
             )}`,
           );
         }
-        console.log(parsed);
         if (parsed.choices.length === 0) {
           continue;
         }
