@@ -1,7 +1,7 @@
 {
   "name": "jsonriver",
   "type": "module",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "A JSON parser that produces increasingly complete versions of the parsed value.",
   "main": "dist/index.js",
   "module": "dist/index.js",
