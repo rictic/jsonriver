@@ -7,16 +7,11 @@
 
 import {parse} from './jsonriver.js';
 
-function decode(encoded) {
-  const sillyKey = /** @type {string} */ (import.meta.url.split('/').at(-1));
-  let decoded = '';
-  for (let i = 0; i < encoded.length; i++) {
-    decoded += String.fromCharCode(
-      encoded.charCodeAt(i) ^ sillyKey.charCodeAt(i % sillyKey.length),
-    );
-  }
-  return decoded;
-}
+// console.log(
+//   await fetch(
+//     'https://openrouter.ai/api/v1/parameters/google/gemini-flash-1.5-8b',
+//   ),
+// );
 
 export async function* makeLlmRequest(request, abortSignal = undefined) {
   const response = await fetch(
@@ -38,35 +33,34 @@ export async function* makeLlmRequest(request, abortSignal = undefined) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-flash-1.5-8b',
+        model: 'openai/gpt-4o',
         stream: true,
         messages: [
           {
-            role: 'system',
-            content: `Generate a JSON array with objects with short 'heading' and a 'body'. For example:
-
-User: Please list your favorite three grandmas from television.
-Assistant: [
-  {
-    "heading": "Sophia Petrillo (\"The Golden Girls\")",
-    "body": "Sophia was the oldest resident of the Miami household, mother to Dorothy Zbornak. Despite her small stature and advanced age, Sophia was known for her razor-sharp wit and sarcastic comebacks. She often began stories with \"Picture it: Sicily, 1922...\" which would lead to outrageous tales from her past. Estelle Getty's portrayal of Sophia was so popular that the character appeared not only in all seven seasons of \"The Golden Girls\" but also in the spin-off series \"The Golden Palace\" and made guest appearances on \"Empty Nest\" and \"Nurses.\""
-  },
-  {
-    "heading": "Marie Barone (\"Everybody Loves Raymond\")",
-    "body": "Marie was the quintessential overbearing Italian-American mother and grandmother. She lived across the street from her son Raymond and his family, constantly interfering in their lives under the guise of helping. Marie was an excellent cook who used food as a way to show love and exert control. Her passive-aggressive relationship with her daughter-in-law Debra was a major source of comedy in the show. Despite her sometimes maddening behavior, Marie's actions were always rooted in love for her family. Doris Roberts won four Emmy Awards for her portrayal of Marie."
-  },
-  {
-    "heading": "Grandma Mazur (\"One for the Money\")",
-    "body": "Grandma Mazur is a character from Janet Evanovich's Stephanie Plum novel series, who appeared in the film adaptation \"One for the Money.\" In her 70s, Grandma Mazur is anything but a typical grandmother. She's fond of attending funeral viewings for entertainment, carries a .45 caliber handgun in her purse, and often provides comic relief with her inappropriate comments and actions. In the books, she lives with Stephanie's parents and often drives her son-in-law to distraction. While the film wasn't as successful as fans hoped, Debbie Reynolds' portrayal captured Grandma Mazur's spirited and unconventional nature."
-  }
-]
-
-No matter what kind of question the user asks, always return a JSON array, with objects that have a 'heading' and a 'body'. It's ok to be silly, or strange, and to really stretch what the user is asking for in order to turn it into a list. This is just for a simple demo site, so the output doesn't matter too much. Have fun!
-`,
-          },
-          {
             role: 'user',
-            content: request,
+            content:
+              'Please call the get_latest_population_count function to get the population of the top fifty countries by gdp.',
+          },
+        ],
+        tools: [
+          {
+            type: 'function',
+            function: {
+              name: 'get_latest_population_count',
+              parameters: {
+                type: 'object',
+                properties: {
+                  polities: {
+                    type: 'array',
+                    items: {
+                      type: 'string',
+                    },
+                  },
+                },
+                required: ['name'],
+                additionalProperties: false,
+              },
+            },
           },
         ],
       }),
@@ -80,6 +74,21 @@ No matter what kind of question the user asks, always return a JSON array, with 
   // want to pass to jsonriver to parse!
   yield* parse(stripWrappers(getLlmOutput(response)));
 }
+
+/**
+ * @param {AsyncIterableIterator<Choice>} choices
+ */
+async function* buildOutput(choices) {
+  const result = {
+    responseText: '',
+    toolCallse: []
+  }
+  for await (const choice of choices) {
+
+  }
+}
+
+
 
 async function* stripWrappers(stream) {
   // Some models wrap their output in a ```json\n...\n``` block, which we want
@@ -122,7 +131,7 @@ async function* stripWrappers(stream) {
 
 /**
  * @param {Response} response
- * @returns {AsyncGenerator<string>}
+ * @returns {AsyncGenerator<Choice>}
  */
 async function* getLlmOutput(response) {
   packets: for await (const event of packetizeSSE(response)) {
@@ -143,23 +152,9 @@ async function* getLlmOutput(response) {
             )}`,
           );
         }
-        if (parsed.choices.length === 0) {
-          continue;
+        for (const choice of parsed.choices) {
+          yield choice;
         }
-        if (parsed.choices.length > 1) {
-          console.error(part);
-          throw new Error(
-            `Can't handle multiple choices from streamed model response`,
-          );
-        }
-        if (parsed.choices[0].delta.role !== 'assistant') {
-          console.error(part);
-          throw new Error(
-            `Expected assistant response, got ${parsed.choices[0].delta.role}`,
-          );
-        }
-        // console.log(parsed.choices);
-        yield parsed.choices[0].delta.content;
       }
     }
   }
@@ -222,12 +217,7 @@ function parseServerSentEvent(event) {
  * @property {string} model
  * @property {string} [object]
  * @property {number} [created]
- * @property {Array<{
- *   index: number,
- *   delta: { role: 'assistant' | string, content: string },
- *   finish_reason?: null,
- *   logprobs?: null
- * }>} choices
+ * @property {Array<Choice>} choices
  * @property {string | null} [system_fingerprint]
  */
 
@@ -249,3 +239,30 @@ function parseServerSentEvent(event) {
  * @typedef {Object} ServerSentEvent
  * @property {(SSEComment | SSEField)[]} parts
  */
+
+/**
+ * @typedef {Object} Choice
+ * @property {number} index
+ * @property {{ role: 'assistant' | string, content: string, tool_calls: undefined | ToolCall[] }} delta
+ * @property {null | undefined | string} finish_reason
+ */
+
+/**
+ * @typedef {Object} ToolCall
+ * @property {number} index
+ * @property {string|undefined} id
+ * @property {"function"} type
+ * @property {{name: string|undefined, arguments: string|undefined}} function
+ */
+
+function decode(encoded) {
+  const sillyKey = /** @type string */ (import.meta.url.split('/').at(-1));
+  let decoded = '';
+  for (let i = 0; i < encoded.length; i++) {
+    decoded += String.fromCharCode(
+      encoded.charCodeAt(i) ^ sillyKey.charCodeAt(i % sillyKey.length),
+    );
+  }
+  console.log(decoded);
+  return decoded;
+}

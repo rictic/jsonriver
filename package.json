@@ -29,6 +29,7 @@
     "@web/dev-server": "^0.4.6",
     "esbuild": "^0.24.0",
     "eslint": "^8.48.0",
+    "openai": "^4.67.3",
     "prettier": "^3.3.3",
     "stream-json": "^1.8.0",
     "tachometer": "^0.7.1",
