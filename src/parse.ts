@@ -54,7 +54,13 @@ export function parse(
   return parser.parse();
 }
 
-export type JsonValue = null | boolean | number | string | JsonValue[] | JsonObject;
+export type JsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | JsonValue[]
+  | JsonObject;
 export type JsonObject = {[key: string]: JsonValue};
 
 const enum StateEnum {
