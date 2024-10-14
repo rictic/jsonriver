@@ -11,6 +11,11 @@
       "import": "./dist/index.js"
     }
   },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
   "scripts": {
     "build": "wireit",
     "test": "wireit",
@@ -32,6 +37,7 @@
     "@typescript-eslint/parser": "^7.0.1",
     "esbuild": "^0.24.0",
     "eslint": "^8.48.0",
+    "np": "^10.0.7",
     "prettier": "^3.3.3",
     "stream-json": "^1.8.0",
     "tachometer": "^0.7.1",
