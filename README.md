@@ -2,18 +2,18 @@
 
 Parse JSON incrementally as it streams in, e.g. from a network request or a language model. Gives you a sequence of increasingly complete values.
 
-jsonriver is small, fast, has no dependencies, and uses only standard features so it works without polyfills or special bundle configuration anywhere that supports ES2022.
+jsonriver is small, fast, has no dependencies, and uses only standard features of JavaScript so it works in any JS environment.
 
 Usage:
 
 ```js
-// Full example at examples/fetch.js
+// Richer example at examples/fetch.js
 import {parse} from 'jsonriver';
 
 const response = await fetch(`https://jsonplaceholder.typicode.com/posts`);
-const vals = parse(response.body);
-for await (const val of vals) {
-  renderer.render(posts);
+const postsStream = parse(response.body.pipeThrough(new TextDecoderStream()));
+for await (const posts of postsStream) {
+  console.log(posts);
 }
 ```
 
