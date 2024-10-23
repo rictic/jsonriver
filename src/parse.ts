@@ -47,10 +47,10 @@ import {
  * 6. As a consequence of 1 and 5, we only add a property to an object once we
  *    have the entire key and enough of the value to know that value's type.
  */
-export function parse(
+export async function* parse(
   stream: AsyncIterable<string>,
 ): AsyncIterableIterator<JsonValue> {
-  return new Parser(stream);
+  yield* new Parser(stream);
 }
 
 export type JsonValue =
