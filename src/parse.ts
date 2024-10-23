@@ -50,8 +50,7 @@ import {
 export function parse(
   stream: AsyncIterable<string>,
 ): AsyncIterableIterator<JsonValue> {
-  const parser = new Parser(stream);
-  return parser.parse();
+  return new Parser(stream);
 }
 
 export type JsonValue =
@@ -96,7 +95,7 @@ interface InObjectExpectingValueState {
   type: StateEnum.InObjectExpectingValue;
   value: [key: string, object: JsonObject];
 }
-class Parser {
+class Parser implements AsyncIterableIterator<JsonValue> {
   private readonly tokenBuffer: JsonToken[] = [];
   private readonly stateStack: State[] = [
     {type: StateEnum.Initial, value: undefined},
@@ -104,11 +103,13 @@ class Parser {
   private toplevelValue: JsonValue | undefined;
   private inputComplete = false;
   readonly tokenStream: AsyncIterator<JsonToken[]>;
+  private finished = false;
+
   constructor(textStream: AsyncIterable<string>) {
     this.tokenStream = tokenize(textStream);
   }
 
-  async expandBuffer() {
+  private async expandBuffer() {
     const next = await this.tokenStream.next();
     if (next.done) {
       this.inputComplete = true;
@@ -121,9 +122,12 @@ class Parser {
     }
   }
 
-  async *parse(): AsyncIterableIterator<JsonValue> {
-    await this.expandBuffer();
+  async next(): Promise<IteratorResult<JsonValue, undefined>> {
+    if (this.finished) {
+      return {done: true, value: undefined};
+    }
     while (true) {
+      await this.expandBuffer();
       const updated = this.progress();
       if (this.toplevelValue === undefined) {
         throw new Error(
@@ -131,13 +135,14 @@ class Parser {
         );
       }
       if (updated) {
-        yield this.toplevelValue;
+        return {done: false, value: this.toplevelValue};
       }
       if (this.stateStack.length === 0) {
         // We're done, we expect no more tokens.
         while (true) {
           if (this.inputComplete && this.tokenBuffer.length === 0) {
-            return;
+            this.finished = true;
+            return {done: true, value: undefined};
           }
           const finalToken = this.tokenBuffer.at(-1);
           if (finalToken !== undefined) {
@@ -150,8 +155,11 @@ class Parser {
           await this.expandBuffer();
         }
       }
-      await this.expandBuffer();
     }
+  }
+
+  [Symbol.asyncIterator](): AsyncIterableIterator<JsonValue> {
+    return this;
   }
 
   private progress(): boolean {

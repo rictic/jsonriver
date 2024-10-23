@@ -9,13 +9,10 @@
  *
  * Throws if the input is not valid JSON, including if it has trailing content.
  */
-export async function* tokenize(
+export function tokenize(
   stream: AsyncIterable<string>,
 ): AsyncIterableIterator<JsonToken[]> {
-  const tokenizer = new Tokenizer(stream);
-  for await (const tokens of tokenizer) {
-    yield tokens;
-  }
+  return new Tokenizer(stream);
 }
 
 const enum State {
@@ -584,14 +581,6 @@ interface ObjectEndToken {
   value: undefined;
 }
 
-// Wrapper around an Input that can only progress it synchronously.
-class SynchronousInput {
-  readonly input: Input;
-  constructor(input: Input) {
-    this.input = input;
-  }
-}
-
 /**
  * Our input buffer.
  *
@@ -604,7 +593,6 @@ class Input {
   bufferComplete = false;
   moreContentExpected = true;
   private stream: AsyncIterator<string>;
-  readonly synchronous = new SynchronousInput(this);
   constructor(stream: AsyncIterable<string>) {
     this.stream = stream[Symbol.asyncIterator]();
   }
