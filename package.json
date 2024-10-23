@@ -80,7 +80,7 @@
         "bench/jsonriver.html",
         "bench/jsonparse.html"
       ],
-      "command": "tachometer bench/jsonriver.html bench/jsonparse.html"
+      "command": "tachometer bench/jsonriver.html bench/jsonriver-1.0.html bench/jsonparse.html "
     },
     "node-bench": {
       "#comment": "Compare jsonriver vs stream-json in Node.js",

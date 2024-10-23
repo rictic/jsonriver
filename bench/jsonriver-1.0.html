@@ -1,0 +1,25 @@
+<script type="module">
+  /**
+   * @license
+   * Copyright Google LLC
+   * SPDX-License-Identifier: BSD-3-Clause
+   */
+  import * as bench from '/bench.js';
+  import {smallJsonString} from './data.js';
+  import {parse} from './bundles/jsonriver-1.0.js';
+  async function* toStream(str) {
+    yield str;
+  }
+  async function jsonParse(jsonString) {
+    let finalValue;
+    for await (const val of parse(toStream(jsonString))) {
+      finalValue = val;
+    }
+    return finalValue;
+  }
+  bench.start();
+  for (let i = 0; i < 100; i++) {
+    await jsonParse(smallJsonString);
+  }
+  bench.stop();
+</script>
