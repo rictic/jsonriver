@@ -97,9 +97,7 @@ interface InObjectExpectingValueState {
 }
 class Parser implements AsyncIterableIterator<JsonValue> {
   readonly #tokenBuffer: JsonToken[] = [];
-  readonly #stateStack: State[] = [
-    {type: StateEnum.Initial, value: undefined},
-  ];
+  readonly #stateStack: State[] = [{type: StateEnum.Initial, value: undefined}];
   #toplevelValue: JsonValue | undefined;
   #inputComplete = false;
   readonly tokenStream: AsyncIterator<JsonToken[]>;
