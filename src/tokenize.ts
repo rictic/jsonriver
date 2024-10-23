@@ -9,13 +9,10 @@
  *
  * Throws if the input is not valid JSON, including if it has trailing content.
  */
-export async function* tokenize(
+export function tokenize(
   stream: AsyncIterable<string>,
 ): AsyncIterableIterator<JsonToken[]> {
-  const tokenizer = new Tokenizer(stream);
-  for await (const tokens of tokenizer) {
-    yield tokens;
-  }
+  return new Tokenizer(stream);
 }
 
 const enum State {
@@ -31,28 +28,28 @@ const enum State {
 
 class Tokenizer implements AsyncIterableIterator<JsonToken[]> {
   readonly input: Input;
-  private outputBuffer: JsonToken[] = [];
-  private stack = [State.ExpectingValue];
+  #outputBuffer: JsonToken[] = [];
+  #stack = [State.ExpectingValue];
   constructor(stream: AsyncIterable<string>) {
     this.input = new Input(stream);
   }
 
   async next(): Promise<IteratorResult<JsonToken[], undefined>> {
     while (true) {
-      const startingBufferLen = this.outputBuffer.length;
-      this.tokenizeMore();
-      if (this.outputBuffer.length > startingBufferLen) {
+      const startingBufferLen = this.#outputBuffer.length;
+      this.#tokenizeMore();
+      if (this.#outputBuffer.length > startingBufferLen) {
         continue;
       } else {
         // Can't progress the parse any more.
         // Do we have output ?
-        if (this.outputBuffer.length > 0) {
-          const tokens = this.outputBuffer;
-          this.outputBuffer = [];
+        if (this.#outputBuffer.length > 0) {
+          const tokens = this.#outputBuffer;
+          this.#outputBuffer = [];
           return {done: false, value: tokens};
         }
         // Are we done?
-        if (this.stack.length === 0) {
+        if (this.#stack.length === 0) {
           await this.input.expectEndOfContent();
           return {done: true, value: undefined};
         }
@@ -62,32 +59,32 @@ class Tokenizer implements AsyncIterableIterator<JsonToken[]> {
     }
   }
 
-  private tokenizeMore() {
-    const state = this.stack[this.stack.length - 1];
+  #tokenizeMore() {
+    const state = this.#stack[this.#stack.length - 1];
     switch (state) {
       case State.ExpectingValue:
-        this.tokenizeValue();
+        this.#tokenizeValue();
         break;
       case State.InString:
-        this.tokenizeString();
+        this.#tokenizeString();
         break;
       case State.StartArray:
-        this.tokenizeArrayStart();
+        this.#tokenizeArrayStart();
         break;
       case State.AfterArrayValue:
-        this.tokenizeAfterArrayValue();
+        this.#tokenizeAfterArrayValue();
         break;
       case State.StartObject:
-        this.tokenizeObjectStart();
+        this.#tokenizeObjectStart();
         break;
       case State.AfterObjectKey:
-        this.tokenizeAfterObjectKey();
+        this.#tokenizeAfterObjectKey();
         break;
       case State.AfterObjectValue:
-        this.tokenizeAfterObjectValue();
+        this.#tokenizeAfterObjectValue();
         break;
       case State.BeforeObjectKey:
-        this.tokenizeBeforeObjectKey();
+        this.#tokenizeBeforeObjectKey();
         break;
       case undefined:
         return;
@@ -98,24 +95,24 @@ class Tokenizer implements AsyncIterableIterator<JsonToken[]> {
     }
   }
 
-  private tokenizeValue() {
+  #tokenizeValue() {
     this.input.skipPastWhitespace();
     if (this.input.tryToTakePrefix('null')) {
-      this.outputBuffer.push({type: JsonTokenType.Null, value: undefined});
-      this.stack.pop();
+      this.#outputBuffer.push({type: JsonTokenType.Null, value: undefined});
+      this.#stack.pop();
       return;
     }
     if (this.input.tryToTakePrefix('true')) {
-      this.outputBuffer.push({type: JsonTokenType.Boolean, value: true});
-      this.stack.pop();
+      this.#outputBuffer.push({type: JsonTokenType.Boolean, value: true});
+      this.#stack.pop();
       return;
     }
     if (this.input.tryToTakePrefix('false')) {
-      this.outputBuffer.push({type: JsonTokenType.Boolean, value: false});
-      this.stack.pop();
+      this.#outputBuffer.push({type: JsonTokenType.Boolean, value: false});
+      this.#stack.pop();
       return;
     }
-    if (this.input.testBuffer(/^[-0123456789]/)) {
+    if (/^[-0123456789]/.test(this.input.buffer)) {
       // Slightly tricky spot, because numbers don't have a terminator,
       // they might end on the end of input, or they might end because we hit
       // a non-number character.
@@ -126,8 +123,8 @@ class Tokenizer implements AsyncIterableIterator<JsonToken[]> {
         }
         this.input.buffer = this.input.buffer.slice(match[0].length);
         const number = JSON.parse(match[0]) as number;
-        this.outputBuffer.push({type: JsonTokenType.Number, value: number});
-        this.stack.pop();
+        this.#outputBuffer.push({type: JsonTokenType.Number, value: number});
+        this.#stack.pop();
         this.input.moreContentExpected = true;
         return;
       } else {
@@ -143,46 +140,46 @@ class Tokenizer implements AsyncIterableIterator<JsonToken[]> {
         const numberChars = this.input.buffer.slice(0, match.index);
         this.input.buffer = this.input.buffer.slice(match.index);
         const number = JSON.parse(numberChars) as number;
-        this.outputBuffer.push({type: JsonTokenType.Number, value: number});
-        this.stack.pop();
+        this.#outputBuffer.push({type: JsonTokenType.Number, value: number});
+        this.#stack.pop();
         return;
       }
     }
     if (this.input.tryToTakePrefix('"')) {
-      this.stack.pop();
-      this.stack.push(State.InString);
-      this.outputBuffer.push({
+      this.#stack.pop();
+      this.#stack.push(State.InString);
+      this.#outputBuffer.push({
         type: JsonTokenType.StringStart,
         value: undefined,
       });
-      this.tokenizeString();
+      this.#tokenizeString();
       return;
     }
     if (this.input.tryToTakePrefix('[')) {
-      this.stack.pop();
-      this.stack.push(State.StartArray);
-      this.outputBuffer.push({
+      this.#stack.pop();
+      this.#stack.push(State.StartArray);
+      this.#outputBuffer.push({
         type: JsonTokenType.ArrayStart,
         value: undefined,
       });
-      return this.tokenizeArrayStart();
+      return this.#tokenizeArrayStart();
     }
     if (this.input.tryToTakePrefix('{')) {
-      this.stack.pop();
-      this.stack.push(State.StartObject);
-      this.outputBuffer.push({
+      this.#stack.pop();
+      this.#stack.push(State.StartObject);
+      this.#outputBuffer.push({
         type: JsonTokenType.ObjectStart,
         value: undefined,
       });
-      return this.tokenizeObjectStart();
+      return this.#tokenizeObjectStart();
     }
   }
 
-  private tokenizeString() {
+  #tokenizeString() {
     const middlePart = {type: JsonTokenType.StringMiddle as const, value: ''};
     const addToMiddlePart = (val: string) => {
       if (middlePart.value === '') {
-        this.outputBuffer.push(middlePart);
+        this.#outputBuffer.push(middlePart);
       }
       middlePart.value += val;
     };
@@ -210,22 +207,22 @@ class Tokenizer implements AsyncIterableIterator<JsonToken[]> {
           // Do we have a string middle and a string end in the buffer?
           // If so, optimize by combining them.
           if (
-            this.outputBuffer.at(-1)?.type === JsonTokenType.StringMiddle &&
-            this.outputBuffer.at(-2)?.type === JsonTokenType.StringStart
+            this.#outputBuffer.at(-1)?.type === JsonTokenType.StringMiddle &&
+            this.#outputBuffer.at(-2)?.type === JsonTokenType.StringStart
           ) {
-            const middle = this.outputBuffer.pop() as StringMiddleToken;
-            this.outputBuffer.pop();
-            this.outputBuffer.push({
+            const middle = this.#outputBuffer.pop() as StringMiddleToken;
+            this.#outputBuffer.pop();
+            this.#outputBuffer.push({
               type: JsonTokenType.String,
               value: middle.value,
             });
           } else {
-            this.outputBuffer.push({
+            this.#outputBuffer.push({
               type: JsonTokenType.StringEnd,
               value: undefined,
             });
           }
-          this.stack.pop();
+          this.#stack.pop();
           return;
         }
         // string escapes
@@ -289,27 +286,27 @@ class Tokenizer implements AsyncIterableIterator<JsonToken[]> {
     }
   }
 
-  private tokenizeArrayStart() {
+  #tokenizeArrayStart() {
     this.input.skipPastWhitespace();
     if (this.input.buffer.length === 0) {
       return;
     }
     if (this.input.tryToTakePrefix(']')) {
-      this.outputBuffer.push({
+      this.#outputBuffer.push({
         type: JsonTokenType.ArrayEnd,
         value: undefined,
       });
-      this.stack.pop();
+      this.#stack.pop();
       return;
     } else {
-      this.stack.pop();
-      this.stack.push(State.AfterArrayValue);
-      this.stack.push(State.ExpectingValue);
-      this.tokenizeValue();
+      this.#stack.pop();
+      this.#stack.push(State.AfterArrayValue);
+      this.#stack.push(State.ExpectingValue);
+      this.#tokenizeValue();
     }
   }
 
-  private tokenizeAfterArrayValue() {
+  #tokenizeAfterArrayValue() {
     this.input.skipPastWhitespace();
     const nextChar = this.input.tryToTake(1);
     switch (nextChar) {
@@ -317,16 +314,16 @@ class Tokenizer implements AsyncIterableIterator<JsonToken[]> {
         return;
       }
       case ']': {
-        this.outputBuffer.push({
+        this.#outputBuffer.push({
           type: JsonTokenType.ArrayEnd,
           value: undefined,
         });
-        this.stack.pop();
+        this.#stack.pop();
         return;
       }
       case ',': {
-        this.stack.push(State.ExpectingValue);
-        return this.tokenizeValue();
+        this.#stack.push(State.ExpectingValue);
+        return this.#tokenizeValue();
       }
       default: {
         throw new Error('Expected , or ], got ' + JSON.stringify(nextChar));
@@ -334,7 +331,7 @@ class Tokenizer implements AsyncIterableIterator<JsonToken[]> {
     }
   }
 
-  private tokenizeObjectStart() {
+  #tokenizeObjectStart() {
     this.input.skipPastWhitespace();
     const nextChar = this.input.tryToTake(1);
     switch (nextChar) {
@@ -342,22 +339,22 @@ class Tokenizer implements AsyncIterableIterator<JsonToken[]> {
         return;
       }
       case '}': {
-        this.outputBuffer.push({
+        this.#outputBuffer.push({
           type: JsonTokenType.ObjectEnd,
           value: undefined,
         });
-        this.stack.pop();
+        this.#stack.pop();
         return;
       }
       case '"': {
-        this.stack.pop();
-        this.stack.push(State.AfterObjectKey);
-        this.stack.push(State.InString);
-        this.outputBuffer.push({
+        this.#stack.pop();
+        this.#stack.push(State.AfterObjectKey);
+        this.#stack.push(State.InString);
+        this.#outputBuffer.push({
           type: JsonTokenType.StringStart,
           value: undefined,
         });
-        return this.tokenizeString();
+        return this.#tokenizeString();
       }
       default: {
         throw new Error('Expected start of object key, got ' + nextChar);
@@ -365,7 +362,7 @@ class Tokenizer implements AsyncIterableIterator<JsonToken[]> {
     }
   }
 
-  private tokenizeAfterObjectKey() {
+  #tokenizeAfterObjectKey() {
     this.input.skipPastWhitespace();
     const nextChar = this.input.tryToTake(1);
     switch (nextChar) {
@@ -373,10 +370,10 @@ class Tokenizer implements AsyncIterableIterator<JsonToken[]> {
         return;
       }
       case ':': {
-        this.stack.pop();
-        this.stack.push(State.AfterObjectValue);
-        this.stack.push(State.ExpectingValue);
-        return this.tokenizeValue();
+        this.#stack.pop();
+        this.#stack.push(State.AfterObjectValue);
+        this.#stack.push(State.ExpectingValue);
+        return this.#tokenizeValue();
       }
       default: {
         throw new Error('Expected colon after object key, got ' + nextChar);
@@ -384,7 +381,7 @@ class Tokenizer implements AsyncIterableIterator<JsonToken[]> {
     }
   }
 
-  private tokenizeAfterObjectValue() {
+  #tokenizeAfterObjectValue() {
     this.input.skipPastWhitespace();
     const nextChar = this.input.tryToTake(1);
     switch (nextChar) {
@@ -392,17 +389,17 @@ class Tokenizer implements AsyncIterableIterator<JsonToken[]> {
         return;
       }
       case '}': {
-        this.outputBuffer.push({
+        this.#outputBuffer.push({
           type: JsonTokenType.ObjectEnd,
           value: undefined,
         });
-        this.stack.pop();
+        this.#stack.pop();
         return;
       }
       case ',': {
-        this.stack.pop();
-        this.stack.push(State.BeforeObjectKey);
-        return this.tokenizeBeforeObjectKey();
+        this.#stack.pop();
+        this.#stack.push(State.BeforeObjectKey);
+        return this.#tokenizeBeforeObjectKey();
       }
       default: {
         throw new Error('Expected , or } after object value, got ' + nextChar);
@@ -410,7 +407,7 @@ class Tokenizer implements AsyncIterableIterator<JsonToken[]> {
     }
   }
 
-  private tokenizeBeforeObjectKey() {
+  #tokenizeBeforeObjectKey() {
     this.input.skipPastWhitespace();
     const nextChar = this.input.tryToTake(1);
     switch (nextChar) {
@@ -418,14 +415,14 @@ class Tokenizer implements AsyncIterableIterator<JsonToken[]> {
         return;
       }
       case '"': {
-        this.stack.pop();
-        this.stack.push(State.AfterObjectKey);
-        this.stack.push(State.InString);
-        this.outputBuffer.push({
+        this.#stack.pop();
+        this.#stack.push(State.AfterObjectKey);
+        this.#stack.push(State.InString);
+        this.#outputBuffer.push({
           type: JsonTokenType.StringStart,
           value: undefined,
         });
-        return this.tokenizeString();
+        return this.#tokenizeString();
       }
       default: {
         throw new Error('Expected start of object key, got ' + nextChar);
@@ -584,14 +581,6 @@ interface ObjectEndToken {
   value: undefined;
 }
 
-// Wrapper around an Input that can only progress it synchronously.
-class SynchronousInput {
-  readonly input: Input;
-  constructor(input: Input) {
-    this.input = input;
-  }
-}
-
 /**
  * Our input buffer.
  *
@@ -603,10 +592,9 @@ class Input {
   // True if the no more content will be added to the buffer.
   bufferComplete = false;
   moreContentExpected = true;
-  private stream: AsyncIterator<string>;
-  readonly synchronous = new SynchronousInput(this);
+  #stream: AsyncIterator<string>;
   constructor(stream: AsyncIterable<string>) {
-    this.stream = stream[Symbol.asyncIterator]();
+    this.#stream = stream[Symbol.asyncIterator]();
   }
 
   /**
@@ -636,7 +624,7 @@ class Input {
    * Returns false if the stream is exhausted.
    */
   async tryToExpandBuffer() {
-    const result = await this.stream.next();
+    const result = await this.#stream.next();
     if (result.done) {
       this.bufferComplete = true;
       if (this.moreContentExpected) {
@@ -658,10 +646,6 @@ class Input {
     }
   }
 
-  testBuffer(regex: RegExp): boolean {
-    return regex.test(this.buffer);
-  }
-
   /**
    * If the buffer starts with `prefix`, consumes it and returns true.
    */
@@ -673,6 +657,11 @@ class Input {
     return false;
   }
 
+  /**
+   * Tries to take `len` characters from the buffer.
+   *
+   * If there are fewer than `len` characters in the buffer, returns undefined.
+   */
   tryToTake(len: number): string | undefined {
     if (this.buffer.length < len) {
       return undefined;
