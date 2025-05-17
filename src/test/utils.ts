@@ -130,7 +130,7 @@ export async function assertSameAsJsonParse(
       actual.success,
       `Expected ${name} to succeed but it failed with ${(expectedError as Error)?.stack}`,
     );
-  } else if ((shouldSucceed = false)) {
+  } else if ((shouldSucceed === false)) {
     assert.ok(!actual.success, `Expected ${name} to fail`);
   }
 }
