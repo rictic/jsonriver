@@ -193,7 +193,7 @@ class Tokenizer implements AsyncIterableIterator<JsonToken[]> {
       middlePart.value += val;
     };
     while (true) {
-      const [chunk, interrupted] = this.input.takeUntil(/["\\]/);
+      const [chunk, interrupted] = this.input.takeUntilQuoteOrBackslash();
       if (chunk.length > 0) {
         // A string middle can't have a control character, newline, or tab
         // eslint-disable-next-line no-control-regex
@@ -706,5 +706,32 @@ class Input {
     const result = this.buffer;
     this.buffer = '';
     return [result, false];
+  }
+
+  /**
+   * Specialized fast path for scanning JSON strings.
+   *
+   * Consumes and returns the input up to the next quote (") or backslash (\).
+   * Returns a tuple of the consumed content and a boolean indicating whether
+   * one of the terminator characters was found.
+   */
+  takeUntilQuoteOrBackslash(): [string, boolean] {
+    const buf = this.buffer;
+    const quoteIndex = buf.indexOf('"');
+    const backslashIndex = buf.indexOf('\\');
+    let idx: number;
+    if (quoteIndex === -1) {
+      idx = backslashIndex;
+    } else if (backslashIndex === -1) {
+      idx = quoteIndex;
+    } else {
+      idx = quoteIndex < backslashIndex ? quoteIndex : backslashIndex;
+    }
+    if (idx === -1) {
+      this.buffer = '';
+      return [buf, false];
+    }
+    this.buffer = buf.slice(idx);
+    return [buf.slice(0, idx), true];
   }
 }
