@@ -113,4 +113,16 @@ suite('tokenizeJsonStream', () => {
       {type: JsonTokenType.Number, value: 123},
     ]);
   });
+  test('can tokenize a number split across chunks', async () => {
+    const tokens = tokenize(makeStream('1', '23'));
+    assert.deepEqual(await toFlatArray(tokens), [
+      {type: JsonTokenType.Number, value: 123},
+    ]);
+  });
+  test('can tokenize a decimal number split across chunks', async () => {
+    const tokens = tokenize(makeStream('3.', '14'));
+    assert.deepEqual(await toFlatArray(tokens), [
+      {type: JsonTokenType.Number, value: 3.14},
+    ]);
+  });
 });

@@ -26,6 +26,15 @@ const enum State {
   BeforeObjectKey,
 }
 
+const jsonNumberPattern = /^-?(0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?$/;
+
+function parseJsonNumber(str: string): number {
+  if (!jsonNumberPattern.test(str)) {
+    throw new Error('Invalid number');
+  }
+  return Number(str);
+}
+
 class Tokenizer implements AsyncIterableIterator<JsonToken[]> {
   readonly input: Input;
   #outputBuffer: JsonToken[] = [];
@@ -122,7 +131,7 @@ class Tokenizer implements AsyncIterableIterator<JsonToken[]> {
           throw new Error('Invalid number');
         }
         this.input.buffer = this.input.buffer.slice(match[0].length);
-        const number = JSON.parse(match[0]) as number;
+        const number = parseJsonNumber(match[0]);
         this.#outputBuffer.push({type: JsonTokenType.Number, value: number});
         this.#stack.pop();
         this.input.moreContentExpected = true;
@@ -139,7 +148,7 @@ class Tokenizer implements AsyncIterableIterator<JsonToken[]> {
         }
         const numberChars = this.input.buffer.slice(0, match.index);
         this.input.buffer = this.input.buffer.slice(match.index);
-        const number = JSON.parse(numberChars) as number;
+        const number = parseJsonNumber(numberChars);
         this.#outputBuffer.push({type: JsonTokenType.Number, value: number});
         this.#stack.pop();
         return;
@@ -237,8 +246,11 @@ class Tokenizer implements AsyncIterableIterator<JsonToken[]> {
             return;
           }
           const hex = this.input.buffer.slice(2, 6);
+          if (!/^[0-9a-fA-F]{4}$/.test(hex)) {
+            throw new Error('Bad Unicode escape in JSON');
+          }
           this.input.buffer = this.input.buffer.slice(6);
-          addToMiddlePart(JSON.parse(`"\\u${hex}"`) as string);
+          addToMiddlePart(String.fromCharCode(parseInt(hex, 16)));
           continue;
         } else {
           this.input.buffer = this.input.buffer.slice(2);
@@ -589,7 +601,7 @@ interface ObjectEndToken {
  */
 class Input {
   buffer = '';
-  // True if the no more content will be added to the buffer.
+  // True if no more content will be added to the buffer.
   bufferComplete = false;
   moreContentExpected = true;
   #stream: AsyncIterator<string>;
@@ -637,12 +649,17 @@ class Input {
   }
 
   skipPastWhitespace() {
-    // The only four whitespace characters in JSON are space,
-    // tab, newline, and carriage return.
-    const pattern = /^[ \n\r\t]+/;
-    const match = pattern.exec(this.buffer);
-    if (match) {
-      this.buffer = this.buffer.slice(match.index + match[0].length);
+    let i = 0;
+    while (i < this.buffer.length) {
+      const c = this.buffer.charCodeAt(i);
+      if (c === 32 || c === 9 || c === 10 || c === 13) {
+        i++;
+      } else {
+        break;
+      }
+    }
+    if (i > 0) {
+      this.buffer = this.buffer.slice(i);
     }
   }
 
