@@ -26,7 +26,7 @@ export function* makeStreams(val: string) {
 
   for (let chunkSize = 1; chunkSize < val.length; chunkSize++) {
     yield {
-      name: `chunksize ${chunkSize}`,
+      name: `chunk size ${chunkSize}`,
       stream: makeStreamOfChunks(val, chunkSize),
     };
   }
