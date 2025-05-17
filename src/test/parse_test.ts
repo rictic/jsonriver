@@ -25,7 +25,7 @@ async function* mapStructuralClone<T>(
 }
 
 suite('parse', () => {
-  test('round tripping', async () => {
+  test('round tripping', async (t) => {
     const jsonValues = [
       {
         a: [{b: ''}],
@@ -89,8 +89,10 @@ suite('parse', () => {
         },
       },
     ] as const;
-    for (const jsonValue of jsonValues) {
-      await assertRoundTrips(jsonValue);
+    for (const [i, jsonValue] of jsonValues.entries()) {
+      await t.test(`case ${i}`, async () => {
+        await assertRoundTrips(jsonValue);
+      });
     }
   });
 
@@ -100,14 +102,15 @@ suite('parse', () => {
     // a string literal directly, and when decoded using a u escape.
     for (let i = 0; i <= 0xffff; i++) {
       const charcodeStr = String.fromCharCode(i);
+      const hex = i.toString(16).padStart(4, '0');
       await assertSameAsJsonParse(
-        `string literal with ${i}th character`,
+        `literal U+${hex}`,
         `"${charcodeStr}"`,
         undefined,
       );
       await assertSameAsJsonParse(
-        `\\u escape with ${i}th character`,
-        `"\\u${i.toString(16).padStart(4, '0')}"`,
+        `\\u escape U+${hex}`,
+        `"\\u${hex}"`,
         undefined,
       );
     }
@@ -121,8 +124,8 @@ suite('parse', () => {
     )
       .trim()
       .split('\n');
-    for (const str of jsonVals) {
-      await assertSameAsJsonParse(str, str, true);
+    for (const [i, str] of jsonVals.entries()) {
+      await assertSameAsJsonParse(`value ${i}`, str, true);
     }
   });
 

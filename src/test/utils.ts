@@ -121,16 +121,19 @@ export async function assertSameAsJsonParse(
   assert.deepEqual(
     actual,
     expected,
-    `ActualError: ${(actualError as Error)?.stack} ExpectedError: ${
+    `${name} parsing ${JSON.stringify(json)}"\nActualError: ${(actualError as Error)?.stack}\nExpectedError: ${
       (expectedError as Error)?.stack
     }`,
   );
   if (shouldSucceed === true) {
     assert.ok(
       actual.success,
-      `Expected ${name} to succeed but it failed with ${(expectedError as Error)?.stack}`,
+      `${name} expected success for ${JSON.stringify(json)} but failed with ${(expectedError as Error)?.stack}`,
     );
   } else if (shouldSucceed === false) {
-    assert.ok(!actual.success, `Expected ${name} to fail`);
+    assert.ok(
+      !actual.success,
+      `${name} expected failure for ${JSON.stringify(json)}`,
+    );
   }
 }
