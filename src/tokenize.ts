@@ -589,7 +589,7 @@ interface ObjectEndToken {
  */
 class Input {
   buffer = '';
-  // True if the no more content will be added to the buffer.
+  // True if no more content will be added to the buffer.
   bufferComplete = false;
   moreContentExpected = true;
   #stream: AsyncIterator<string>;
