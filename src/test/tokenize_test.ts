@@ -125,4 +125,16 @@ suite('tokenizeJsonStream', () => {
       {type: JsonTokenType.Number, value: 3.14},
     ]);
   });
+  test('can tokenize a negative number', async () => {
+    const tokens = tokenize(makeStream('-42'));
+    assert.deepEqual(await toFlatArray(tokens), [
+      {type: JsonTokenType.Number, value: -42},
+    ]);
+  });
+  test('can tokenize a number with exponent', async () => {
+    const tokens = tokenize(makeStream('6.02e23'));
+    assert.deepEqual(await toFlatArray(tokens), [
+      {type: JsonTokenType.Number, value: 6.02e23},
+    ]);
+  });
 });
