@@ -7,8 +7,8 @@
 import {
   JsonTokenType,
   jsonTokenTypeToString,
-  JsonToken,
-  tokenize,
+  Tokenizer,
+  TokenHandler,
 } from './tokenize.js';
 
 /**
@@ -95,29 +95,15 @@ interface InObjectExpectingValueState {
   type: StateEnum.InObjectExpectingValue;
   value: [key: string, object: JsonObject];
 }
-class Parser implements AsyncIterableIterator<JsonValue> {
-  readonly #tokenBuffer: JsonToken[] = [];
+class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
   readonly #stateStack: State[] = [{type: StateEnum.Initial, value: undefined}];
   #toplevelValue: JsonValue | undefined;
-  #inputComplete = false;
-  readonly tokenStream: AsyncIterator<JsonToken[]>;
+  readonly tokenizer: Tokenizer;
   #finished = false;
+  #progressed = false;
 
   constructor(textStream: AsyncIterable<string>) {
-    this.tokenStream = tokenize(textStream);
-  }
-
-  async #expandBuffer() {
-    const next = await this.tokenStream.next();
-    if (next.done) {
-      this.#inputComplete = true;
-      return;
-    }
-    // add in reverse order so we can pop off the end
-    const tokens = next.value;
-    for (let i = tokens.length - 1; i >= 0; i--) {
-      this.#tokenBuffer.push(tokens[i]!);
-    }
+    this.tokenizer = new Tokenizer(textStream, this);
   }
 
   async next(): Promise<IteratorResult<JsonValue, undefined>> {
@@ -125,34 +111,24 @@ class Parser implements AsyncIterableIterator<JsonValue> {
       return {done: true, value: undefined};
     }
     while (true) {
-      await this.#expandBuffer();
-      const updated = this.#progress();
-      if (this.#toplevelValue === undefined) {
-        throw new Error(
-          'Internal error: toplevelValue should not be undefined after at least one call to progress()',
-        );
+      while (this.tokenizer.tokenizeMore()) {
+        // keep tokenizing while progress can be made synchronously
       }
-      if (updated) {
+      if (this.#progressed) {
+        this.#progressed = false;
+        if (this.#toplevelValue === undefined) {
+          throw new Error(
+            'Internal error: toplevelValue should not be undefined after at least one token',
+          );
+        }
         return {done: false, value: this.#toplevelValue};
       }
       if (this.#stateStack.length === 0) {
-        // We're done, we expect no more tokens.
-        while (true) {
-          if (this.#inputComplete && this.#tokenBuffer.length === 0) {
-            this.#finished = true;
-            return {done: true, value: undefined};
-          }
-          const finalToken = this.#tokenBuffer.at(-1);
-          if (finalToken !== undefined) {
-            throw new Error(
-              `Unexpected trailing content: ${jsonTokenTypeToString(
-                finalToken.type,
-              )}`,
-            );
-          }
-          await this.#expandBuffer();
-        }
+        await this.tokenizer.input.expectEndOfContent();
+        this.#finished = true;
+        return {done: true, value: undefined};
       }
+      await this.tokenizer.input.tryToExpandBuffer();
     }
   }
 
@@ -160,52 +136,45 @@ class Parser implements AsyncIterableIterator<JsonValue> {
     return this;
   }
 
-  #progress(): boolean {
-    let progressed = false;
-    while (true) {
-      const token = this.#tokenBuffer.pop();
-      if (token === undefined) {
-        break;
-      }
+  onToken(type: JsonTokenType, value: unknown): void {
+    if (!this.#progressed) {
       const state = this.#stateStack.at(-1);
-      if (state === undefined) {
-        throw new Error('Unexpected trailing input');
+      switch (type) {
+        case undefined:
+        case JsonTokenType.StringEnd:
+        case JsonTokenType.ArrayEnd:
+        case JsonTokenType.ObjectEnd:
+          break;
+        case JsonTokenType.StringStart:
+          if (state?.type !== StateEnum.InObjectExpectingKey) {
+            this.#progressed = true;
+          }
+          break;
+        case JsonTokenType.StringMiddle:
+          if (this.#stateStack.at(-2)?.type !== StateEnum.InObjectExpectingKey) {
+            this.#progressed = true;
+          }
+          break;
+        default:
+          this.#progressed = true;
       }
-      if (!progressed) {
-        switch (token.type) {
-          case undefined:
-          case JsonTokenType.StringEnd:
-          case JsonTokenType.ArrayEnd:
-          case JsonTokenType.ObjectEnd:
-            break;
-          case JsonTokenType.StringStart:
-            if (state.type !== StateEnum.InObjectExpectingKey) {
-              progressed = true;
-            }
-            break;
-          case JsonTokenType.StringMiddle:
-            if (
-              this.#stateStack.at(-2)?.type !== StateEnum.InObjectExpectingKey
-            ) {
-              progressed = true;
-            }
-            break;
-          default:
-            progressed = true;
-        }
-      }
-      switch (state.type) {
+    }
+    const state = this.#stateStack.at(-1);
+    if (state === undefined) {
+      throw new Error('Unexpected trailing input');
+    }
+    switch (state.type) {
         case StateEnum.Initial: {
           // We never keep the initial state for more than one call to progress.
           this.#stateStack.pop();
-          this.#toplevelValue = this.#progressValue(token);
+          this.#toplevelValue = this.#progressValue(type, value);
           break;
         }
         case StateEnum.InString: {
           const parentState = this.#stateStack.at(-2);
-          switch (token.type) {
+          switch (type) {
             case JsonTokenType.StringMiddle:
-              state.value += token.value;
+              state.value += value as string;
               break;
             case JsonTokenType.StringEnd:
               this.#stateStack.pop();
@@ -213,7 +182,7 @@ class Parser implements AsyncIterableIterator<JsonValue> {
             default:
               throw new Error(
                 `Unexpected ${jsonTokenTypeToString(
-                  token.type,
+                  type,
                 )} token in the middle of string starting ${JSON.stringify(
                   state.value,
                 )}`,
@@ -266,19 +235,19 @@ class Parser implements AsyncIterableIterator<JsonValue> {
           break;
         }
         case StateEnum.InArray: {
-          switch (token.type) {
+          switch (type) {
             case JsonTokenType.ArrayEnd:
               this.#stateStack.pop();
               break;
             default: {
-              const value = this.#progressValue(token);
-              state.value.push(value);
+              const v = this.#progressValue(type, value);
+              state.value.push(v);
             }
           }
           break;
         }
         case StateEnum.InObjectExpectingKey: {
-          switch (token.type) {
+          switch (type) {
             case JsonTokenType.StringStart: {
               this.#stateStack.push({
                 type: StateEnum.InString,
@@ -290,7 +259,7 @@ class Parser implements AsyncIterableIterator<JsonValue> {
               this.#stateStack.pop();
               this.#stateStack.push({
                 type: StateEnum.InObjectExpectingValue,
-                value: [token.value, state.value],
+                value: [value as string, state.value],
               });
               break;
             }
@@ -300,47 +269,45 @@ class Parser implements AsyncIterableIterator<JsonValue> {
             default:
               throw new Error(
                 `Unexpected ${jsonTokenTypeToString(
-                  token.type,
+                  type,
                 )} token in the middle of object expecting key`,
               );
           }
           break;
         }
         case StateEnum.InObjectExpectingValue: {
-          switch (token.type) {
+          switch (type) {
             case JsonTokenType.ObjectEnd:
               this.#stateStack.pop();
               break;
             default: {
               const [key, object] = state.value;
-              if (token.type !== JsonTokenType.StringStart) {
+              if (type !== JsonTokenType.StringStart) {
                 this.#stateStack.pop();
                 this.#stateStack.push({
                   type: StateEnum.InObjectExpectingKey,
                   value: object,
                 });
               }
-              const value = this.#progressValue(token);
-              object[key] = value;
+              const v = this.#progressValue(type, value);
+              object[key] = v;
             }
           }
           break;
         }
       }
-    }
-    return progressed;
   }
 
-  #progressValue(token: JsonToken): JsonValue {
-    switch (token.type) {
+  #progressValue(type: JsonTokenType, value: unknown): JsonValue {
+    switch (type) {
       case JsonTokenType.Null:
         return null;
       case JsonTokenType.Boolean:
-        return token.value;
+        return value as boolean;
       case JsonTokenType.Number:
-        return token.value;
+        return value as number;
       case JsonTokenType.String:
-        return token.value;
+        return value as string;
       case JsonTokenType.StringStart: {
         const state: InStringState = {type: StateEnum.InString, value: ''};
         this.#stateStack.push(state);
@@ -361,7 +328,7 @@ class Parser implements AsyncIterableIterator<JsonValue> {
       }
       default:
         throw new Error(
-          'Unexpected token type: ' + jsonTokenTypeToString(token.type),
+          'Unexpected token type: ' + jsonTokenTypeToString(type),
         );
     }
   }
