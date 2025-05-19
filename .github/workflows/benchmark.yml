@@ -38,21 +38,21 @@ jobs:
       - name: Copy main branch build artifacts
         run: cp main-checkout/bench/bundles/bundle.min.js ${{ github.workspace }}/dist-main/bundle.min.js
 
-      - name: Clean up main branch checkout
-        run: rm -rf main-checkout
-
       # Section 2: Checkout PR, build, and run benchmark comparing against main's build
       - name: Checkout PR branch
         uses: actions/checkout@v4 # Checks out PR code to the root of the workspace
+        with:
+          path: pr-checkout # Checkout to a specific subdirectory
 
       - name: Set up Node.js for PR branch
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: package-lock.json # Cache based on PR's lockfile
+          cache-dependency-path: pr-checkout/package-lock.json # Cache based on PR's lockfile
 
       - name: Install dependencies for PR branch
+        working-directory: pr-checkout
         run: npm ci
 
       - name: Debug- check dist-main contents
@@ -60,6 +60,7 @@ jobs:
 
       - name: Run Node benchmark
         id: benchmark
+        working-directory: pr-checkout
         run: |
           echo "stdout<<EOF" >> $GITHUB_OUTPUT
           npm run node-bench >> $GITHUB_OUTPUT
