@@ -228,13 +228,6 @@ class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
           case JsonTokenType.StringStart:
             this.#stateStack.push({type: StateEnum.InString, value: ''});
             break;
-          case JsonTokenType.String:
-            this.#stateStack.pop();
-            this.#stateStack.push({
-              type: StateEnum.InObjectExpectingValue,
-              value: [value as string, state.value],
-            });
-            break;
           case JsonTokenType.ObjectEnd:
             this.#stateStack.pop();
             break;
@@ -275,8 +268,6 @@ class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
         return value as boolean;
       case JsonTokenType.Number:
         return value as number;
-      case JsonTokenType.String:
-        return value as string;
       case JsonTokenType.StringStart: {
         const state: InStringState = {type: StateEnum.InString, value: ''};
         this.#stateStack.push(state);

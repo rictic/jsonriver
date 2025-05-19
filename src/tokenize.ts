@@ -49,6 +49,10 @@ export class Tokenizer {
     this.#handler = handler;
   }
 
+  isDone(): boolean {
+    return this.#stack.length === 0 && this.input.buffer.length === 0;
+  }
+
   async pump(): Promise<void> {
     const start = this.#emittedTokens;
     while (true) {
@@ -414,7 +418,6 @@ export const enum JsonTokenType {
   Null,
   Boolean,
   Number,
-  String,
   StringStart,
   StringMiddle,
   StringEnd,
@@ -432,8 +435,6 @@ export function jsonTokenTypeToString(type: JsonTokenType): string {
       return 'boolean';
     case JsonTokenType.Number:
       return 'number';
-    case JsonTokenType.String:
-      return 'string';
     case JsonTokenType.StringStart:
       return 'string start';
     case JsonTokenType.StringMiddle:
