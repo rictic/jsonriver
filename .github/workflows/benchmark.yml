@@ -10,34 +10,73 @@ jobs:
       pull-requests: write
       issues: write
     steps:
-      - name: Checkout repository
+      # Section 1: Build 'main' branch and store its artifacts
+      - name: Checkout main branch
         uses: actions/checkout@v4
+        with:
+          ref: main # Specify the main branch
+          path: main-checkout # Checkout to a specific subdirectory
 
-      - name: Set up Node.js
+      - name: Set up Node.js for main branch build
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: main-checkout/package-lock.json # Cache based on main's lockfile
 
-      - name: Install dependencies
+      - name: Install dependencies for main branch
+        working-directory: main-checkout
         run: npm ci
 
+      - name: Build main branch
+        working-directory: main-checkout
+        run: npm run build-bench-bundle
+
+      - name: Create artifact directory for main's build
+        run: mkdir -p ${{ github.workspace }}/dist-main
+
+      - name: Copy main branch build artifacts
+        run: cp main-checkout/bench/bundles/bundle.min.js ${{ github.workspace }}/dist-main/bundle.min.js
+
+      # Section 2: Checkout PR, build, and run benchmark comparing against main's build
+      - name: Checkout PR branch
+        uses: actions/checkout@v4 # Checks out PR code to the root of the workspace
+        with:
+          path: pr-checkout # Checkout to a specific subdirectory
+
+      - name: Set up Node.js for PR branch
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: pr-checkout/package-lock.json # Cache based on PR's lockfile
+
+      - name: Install dependencies for PR branch
+        working-directory: pr-checkout
+        run: npm ci
+
+      - name: Debug- check dist-main contents
+        run: ls -la ${{ github.workspace }}/dist-main
+
       - name: Run Node benchmark
-        id: benchmark # Give this step an id to access its output later
+        id: benchmark
+        working-directory: pr-checkout
         run: |
           echo "stdout<<EOF" >> $GITHUB_OUTPUT
           npm run node-bench >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
+        env:
+          MAIN_BRANCH_BUNDLE_PATH: ${{ github.workspace }}/dist-main/bundle.min.js
 
       - name: Comment benchmark output on PR
         uses: actions/github-script@v7
-        if: github.event_name == 'pull_request' # Only run on PRs
+        if: github.event_name == 'pull_request'
         with:
-          github-token: ${{secrets.GITHUB_TOKEN}} # Explicitly pass the token
+          github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
             const rawOutput = `${{ steps.benchmark.outputs.stdout }}`;
             // Further escape backticks for the final markdown code block
-            const output = rawOutput.replace(/`/g, '\\`');
+            const output = rawOutput;
             const backticks = '```';
             const body = '## Benchmark Results :rocket:\n\n' + backticks + output + backticks;
 

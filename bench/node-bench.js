@@ -10,7 +10,6 @@
 
 import {streamJsonParser} from './stream-json.js';
 import {parse} from './bundles/bundle.min.js';
-import {parse as unoptimizedParse} from './bundles/baseline.min.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
@@ -31,30 +30,57 @@ const largeJsonString = fs.readFileSync(
 async function* toStream(str) {
   yield str;
 }
-async function jsonParse(jsonString) {
+
+// Parser for the current working directory
+async function jsonParseCurrent(jsonString) {
   let finalValue;
   for await (const val of parse(toStream(jsonString))) {
     finalValue = val;
   }
   return finalValue;
 }
-async function jsonParseOld(jsonString) {
-  let finalValue;
-  for await (const val of unoptimizedParse(toStream(jsonString))) {
-    finalValue = val;
-  }
-  return finalValue;
+
+// Logic to determine the comparison target (main branch or baseline)
+let oldJsonRiver;
+const mainBranchBundlePath = process.env.MAIN_BRANCH_BUNDLE_PATH;
+
+if (mainBranchBundlePath) {
+  const {parse} = await import(path.resolve(mainBranchBundlePath));
+
+  oldJsonRiver = {
+    name: 'jsonriver (main branch)',
+    parse: async function jsonParseMainBranch(jsonString) {
+      let finalValue;
+      for await (const val of parse(toStream(jsonString))) {
+        finalValue = val;
+      }
+      return finalValue;
+    },
+  };
+} else {
+  const baselineModuleUrl = new URL(
+    './bundles/baseline.min.js',
+    import.meta.url,
+  ).href;
+  const {parse} = await import(baselineModuleUrl);
+  oldJsonRiver = {
+    name: 'jsonriver v0.1',
+    parse: async function jsonParseBaseline(jsonString) {
+      let finalValue;
+      for await (const val of parse(toStream(jsonString))) {
+        finalValue = val;
+      }
+      return finalValue;
+    },
+  };
 }
 
 const comparisons = [
   {
-    name: 'jsonriver',
-    parse: jsonParse,
+    name: 'jsonriver (current)',
+    parse: jsonParseCurrent,
   },
-  {
-    name: 'jsonriver v0.1',
-    parse: jsonParseOld,
-  },
+  oldJsonRiver,
   {
     name: 'stream-json',
     parse: streamJsonParser,
@@ -89,7 +115,7 @@ async function benchmarkFile(comparisons, str, name, numTimes) {
   console.log(`Parsing ${name} averaged over ${numTimes} runs`);
   for (let i = 0; i < comparisons.length; i++) {
     console.log(
-      `  ${comparisons[i].name.padEnd(15, ' ')} ${mean(times[i])
+      `  ${comparisons[i].name.padEnd(25, ' ')} ${mean(times[i])
         .toFixed(3)
         .padStart(10, ' ')}ms ±${stdDev(times[i]).toFixed(2)}ms`,
     );
@@ -97,7 +123,12 @@ async function benchmarkFile(comparisons, str, name, numTimes) {
   console.log('\n');
 }
 
-await benchmarkFile(comparisons, smallJsonString, 'a small file (64KiB)', 100);
+await benchmarkFile(
+  comparisons,
+  smallJsonString,
+  'a small file (64KiB)',
+  1_000,
+);
 await benchmarkFile(
   comparisons,
   mediumJsonString,
