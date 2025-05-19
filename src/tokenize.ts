@@ -5,7 +5,10 @@
  */
 
 export interface TokenHandler {
-  handleToken(type: JsonTokenType, value: unknown): void;
+  handleToken(type: JsonTokenType.Boolean, value: boolean): void;
+  handleToken(type: JsonTokenType.Number, value: number): void;
+  handleToken(type: JsonTokenType.StringMiddle, value: string): void;
+  handleToken(type: JsonTokenType, value: undefined): void;
 }
 
 /**
@@ -81,9 +84,13 @@ export class Tokenizer {
     }
   }
 
+  #emit(type: JsonTokenType.Boolean, value: boolean): void;
+  #emit(type: JsonTokenType.Number, value: number): void;
+  #emit(type: JsonTokenType.StringMiddle, value: string): void;
+  #emit(type: JsonTokenType, value: undefined): void;
   #emit(type: JsonTokenType, value: unknown) {
     this.#emittedTokens++;
-    this.#handler.handleToken(type, value);
+    this.#handler.handleToken(type, value as any);
   }
 
   #tokenizeMore() {
