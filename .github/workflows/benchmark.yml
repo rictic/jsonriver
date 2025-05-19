@@ -30,7 +30,7 @@ jobs:
 
       - name: Build main branch
         working-directory: main-checkout
-        run: npm run esbuild
+        run: npm run build-bench-bundle
 
       - name: Create artifact directory for main's build
         run: mkdir -p ${{ github.workspace }}/dist-main
