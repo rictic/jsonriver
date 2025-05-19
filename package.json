@@ -24,7 +24,8 @@
     "node-bench": "wireit",
     "format": "prettier . -w",
     "format:check": "prettier . -c",
-    "lint": "wireit"
+    "lint": "wireit",
+    "build-bench-bundle": "wireit"
   },
   "keywords": [
     "json",
@@ -62,7 +63,7 @@
       ],
       "command": "node --test --test-reporter=spec dist/test/*.js"
     },
-    "esbuild": {
+    "build-bench-bundle": {
       "files": [
         "src/**/*.ts"
       ],
@@ -74,7 +75,7 @@
     "benchmark": {
       "#comment": "Compare jsonriver vs jsonparse in the browser",
       "dependencies": [
-        "esbuild"
+        "build-bench-bundle"
       ],
       "files": [
         "bench/jsonriver.html",
@@ -85,7 +86,7 @@
     "node-bench": {
       "#comment": "Compare jsonriver vs stream-json in Node.js",
       "dependencies": [
-        "esbuild"
+        "build-bench-bundle"
       ],
       "files": [
         "bench/node-bench.js",
