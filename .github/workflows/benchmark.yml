@@ -29,16 +29,21 @@ jobs:
         uses: actions/github-script@v7
         if: github.event_name == 'pull_request' # Only run on PRs
         with:
+          github-token: ${{secrets.GITHUB_TOKEN}} # Explicitly pass the token
           script: |
-            const output = `${{ steps.benchmark.outputs.stdout }}`;
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `## Node.js Benchmark Results  бенчмарк :rocket:
+            const rawOutput = `${{ steps.benchmark.outputs.stdout }}`;
+            // Further escape backticks for the final markdown code block
+            const output = rawOutput.replace(/`/g, '\\`');
+
+            const body = `## Node.js Benchmark Results бенчмарк :rocket:
 
 \`\`\`
 ${output}
 \`\`\`
-`
+`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
             });
