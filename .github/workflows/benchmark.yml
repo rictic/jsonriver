@@ -34,13 +34,9 @@ jobs:
             const rawOutput = `${{ steps.benchmark.outputs.stdout }}`;
             // Further escape backticks for the final markdown code block
             const output = rawOutput.replace(/`/g, '\\`');
+            const backticks = '```';
+            const body = '## Benchmark Results :rocket:\n\n' + backticks + output + backticks;
 
-            const body = `## Node.js Benchmark Results бенчмарк :rocket:
-
-\`\`\`
-${output}
-\`\`\`
-`;
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
