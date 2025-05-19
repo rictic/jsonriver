@@ -36,7 +36,7 @@ jobs:
         run: mkdir -p ${{ github.workspace }}/dist-main
 
       - name: Copy main branch build artifacts
-        run: cp main-checkout/bench/bundles/bundle.min.js ${{ github.workspace }}/dist-main/
+        run: cp main-checkout/bench/bundles/bundle.min.js ${{ github.workspace }}/dist-main/bundle.min.js
 
       - name: Clean up main branch checkout
         run: rm -rf main-checkout
@@ -54,6 +54,9 @@ jobs:
 
       - name: Install dependencies for PR branch
         run: npm ci
+
+      - name: Debug- check dist-main contents
+        run: ls -la ${{ github.workspace }}/dist-main
 
       - name: Run Node benchmark
         id: benchmark
