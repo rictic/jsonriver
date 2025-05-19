@@ -8,6 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
+      issues: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -23,7 +24,10 @@ jobs:
 
       - name: Run Node benchmark
         id: benchmark # Give this step an id to access its output later
-        run: npm run node-bench
+        run: |
+          echo "stdout<<EOF" >> $GITHUB_OUTPUT
+          npm run node-bench >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Comment benchmark output on PR
         uses: actions/github-script@v7
