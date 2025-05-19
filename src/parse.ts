@@ -152,7 +152,9 @@ class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
           }
           break;
         case JsonTokenType.StringMiddle:
-          if (this.#stateStack.at(-2)?.type !== StateEnum.InObjectExpectingKey) {
+          if (
+            this.#stateStack.at(-2)?.type !== StateEnum.InObjectExpectingKey
+          ) {
             this.#progressed = true;
           }
           break;
@@ -183,10 +185,13 @@ class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
             this.#toplevelValue = updatedString;
             break;
           case StateEnum.InArray:
-            (parentState as InArrayState).value[(parentState as InArrayState).value.length - 1] = updatedString;
+            (parentState as InArrayState).value[
+              (parentState as InArrayState).value.length - 1
+            ] = updatedString;
             break;
           case StateEnum.InObjectExpectingValue: {
-            const [key, object] = (parentState as InObjectExpectingValueState).value;
+            const [key, object] = (parentState as InObjectExpectingValueState)
+              .value;
             object[key] = updatedString;
             if (this.#stateStack.at(-1) === parentState) {
               this.#stateStack.pop();
@@ -207,7 +212,9 @@ class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
             }
             break;
           default:
-            throw new Error('Unexpected parent state for string: ' + parentState?.type);
+            throw new Error(
+              'Unexpected parent state for string: ' + parentState?.type,
+            );
         }
         break;
       }
@@ -228,7 +235,10 @@ class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
             this.#stateStack.pop();
             this.#stateStack.push({
               type: StateEnum.InObjectExpectingValue,
-              value: [value as string, (state as InObjectExpectingKeyState).value],
+              value: [
+                value as string,
+                (state as InObjectExpectingKeyState).value,
+              ],
             });
             break;
           case JsonTokenType.ObjectEnd:
@@ -249,7 +259,10 @@ class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
             const [key, object] = (state as InObjectExpectingValueState).value;
             if (type !== JsonTokenType.StringStart) {
               this.#stateStack.pop();
-              this.#stateStack.push({type: StateEnum.InObjectExpectingKey, value: object});
+              this.#stateStack.push({
+                type: StateEnum.InObjectExpectingKey,
+                value: object,
+              });
             }
             const v = this.#progressValue(type, value);
             object[key] = v;

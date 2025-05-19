@@ -385,7 +385,6 @@ export class Tokenizer {
       }
     }
   }
-
 }
 
 /**
@@ -450,7 +449,6 @@ export interface NumberToken {
   readonly type: JsonTokenType.Number;
   readonly value: number;
 }
-
 
 /**
  * Our input buffer.
