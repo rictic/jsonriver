@@ -34,6 +34,8 @@ const enum State {
 
 const jsonNumberPattern = /^-?(0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?$/;
 
+const whitespaceRegex = /^[ \t\n\r]+/;
+
 function parseJsonNumber(str: string): number {
   if (!jsonNumberPattern.test(str)) {
     throw new Error('Invalid number');
@@ -548,17 +550,9 @@ class Input {
   }
 
   skipPastWhitespace() {
-    let i = 0;
-    while (i < this.buffer.length) {
-      const c = this.buffer.charCodeAt(i);
-      if (c === 32 || c === 9 || c === 10 || c === 13) {
-        i++;
-      } else {
-        break;
-      }
-    }
-    if (i > 0) {
-      this.buffer = this.buffer.slice(i);
+    const match = whitespaceRegex.exec(this.buffer);
+    if (match) {
+      this.buffer = this.buffer.slice(match[0].length);
     }
   }
 
@@ -613,15 +607,18 @@ class Input {
    */
   takeUntilQuoteOrBackslash(): [string, boolean] {
     const buf = this.buffer;
-    let i = 0;
-    while (i < buf.length) {
-      const c = buf.charCodeAt(i);
-      if (c === 34 || c === 92) {
-        const result = buf.slice(0, i);
-        this.buffer = buf.slice(i);
-        return [result, true];
-      }
-      i++;
+    const quoteIdx = buf.indexOf('"');
+    const backIdx = buf.indexOf('\\');
+    const i =
+      quoteIdx === -1
+        ? backIdx
+        : backIdx === -1
+        ? quoteIdx
+        : Math.min(quoteIdx, backIdx);
+    if (i !== -1) {
+      const result = buf.slice(0, i);
+      this.buffer = buf.slice(i);
+      return [result, true];
     }
     this.buffer = '';
     return [buf, false];
