@@ -78,3 +78,15 @@ Run the test suite with:
 ```bash
 npm test
 ```
+
+Run the linter with:
+
+```bash
+npm run lint
+```
+
+And auto-fix most lint issues with:
+
+```bash
+npm run lint -- --fix
+```
