@@ -613,17 +613,22 @@ class Input {
    */
   takeUntilQuoteOrBackslash(): [string, boolean] {
     const buf = this.buffer;
-    let i = 0;
-    while (i < buf.length) {
-      const c = buf.charCodeAt(i);
-      if (c === 34 || c === 92) {
-        const result = buf.slice(0, i);
-        this.buffer = buf.slice(i);
-        return [result, true];
-      }
-      i++;
+    const quoteIndex = buf.indexOf('"');
+    const backslashIndex = buf.indexOf('\\');
+    let firstIndex: number;
+    if (quoteIndex === -1) {
+      firstIndex = backslashIndex;
+    } else if (backslashIndex === -1) {
+      firstIndex = quoteIndex;
+    } else {
+      firstIndex = quoteIndex < backslashIndex ? quoteIndex : backslashIndex;
     }
-    this.buffer = '';
-    return [buf, false];
+    if (firstIndex === -1) {
+      this.buffer = '';
+      return [buf, false];
+    }
+    const result = buf.slice(0, firstIndex);
+    this.buffer = buf.slice(firstIndex);
+    return [result, true];
   }
 }

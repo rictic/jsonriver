@@ -118,6 +118,15 @@ suite('tokenizeJsonStream', () => {
       {type: JsonTokenType.StringEnd, value: undefined},
     ]);
   });
+  test('handles escape split across chunks', async () => {
+    const tokens = tokenize(makeStream('"a\\', 'n"'));
+    assert.deepEqual(await toFlatArray(tokens), [
+      {type: JsonTokenType.StringStart, value: undefined},
+      {type: JsonTokenType.StringMiddle, value: 'a'},
+      {type: JsonTokenType.StringMiddle, value: '\n'},
+      {type: JsonTokenType.StringEnd, value: undefined},
+    ]);
+  });
   test('can tokenize an empty object', async () => {
     const tokens = tokenize(makeStream('{}'));
     assert.deepEqual(await toFlatArray(tokens), [
