@@ -90,7 +90,9 @@ export class Tokenizer {
   #emit(type: JsonTokenType, value: undefined): void;
   #emit(type: JsonTokenType, value: unknown) {
     this.#emittedTokens++;
-    this.#handler.handleToken(type, value as any);
+    // An invalid cast, but the invariants between this method and that one
+    // are the same.
+    this.#handler.handleToken(type, value as undefined);
   }
 
   #tokenizeMore() {
