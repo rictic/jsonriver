@@ -151,12 +151,13 @@ class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
             this.#progressed = true;
           }
           break;
-        case JsonTokenType.StringMiddle:
+        case JsonTokenType.StringMiddle: {
           const prev = this.#stateStack[this.#stateStack.length - 2];
           if (prev?.type !== StateEnum.InObjectExpectingKey) {
             this.#progressed = true;
           }
           break;
+        }
         default:
           this.#progressed = true;
       }

@@ -154,51 +154,51 @@ export class Tokenizer {
         // Slightly tricky spot, because numbers don't have a terminator,
         // they might end on the end of input, or they might end because we hit
         // a non-number character.
-      if (this.input.bufferComplete) {
-        const match = this.input.buffer.match(/^[-+0123456789eE.]+/);
-        if (!match) {
-          throw new Error('Invalid number');
-        }
-        this.input.buffer = this.input.buffer.slice(match[0].length);
-        const number = parseJsonNumber(match[0]);
-        this.#emit(JsonTokenType.Number, number);
-        this.#stack.pop();
-        this.input.moreContentExpected = true;
-        return;
-      } else {
-        // find first non-number character
-        let i = 0;
-        const buf = this.input.buffer;
-        while (i < buf.length) {
-          const c = buf.charCodeAt(i);
-          if (
-            (c >= 48 && c <= 57) ||
-            c === 45 ||
-            c === 43 ||
-            c === 46 ||
-            c === 101 ||
-            c === 69
-          ) {
-            i++;
-          } else {
-            break;
+        if (this.input.bufferComplete) {
+          const match = this.input.buffer.match(/^[-+0123456789eE.]+/);
+          if (!match) {
+            throw new Error('Invalid number');
           }
-        }
-        if (i === buf.length) {
-          // Return to expand the buffer, but since there's no terminator
-          // for a number, we need to mark that finding the end of the input
-          // isn't a sign of failure.
-          this.input.moreContentExpected = false;
+          this.input.buffer = this.input.buffer.slice(match[0].length);
+          const number = parseJsonNumber(match[0]);
+          this.#emit(JsonTokenType.Number, number);
+          this.#stack.pop();
+          this.input.moreContentExpected = true;
+          return;
+        } else {
+          // find first non-number character
+          let i = 0;
+          const buf = this.input.buffer;
+          while (i < buf.length) {
+            const c = buf.charCodeAt(i);
+            if (
+              (c >= 48 && c <= 57) ||
+              c === 45 ||
+              c === 43 ||
+              c === 46 ||
+              c === 101 ||
+              c === 69
+            ) {
+              i++;
+            } else {
+              break;
+            }
+          }
+          if (i === buf.length) {
+            // Return to expand the buffer, but since there's no terminator
+            // for a number, we need to mark that finding the end of the input
+            // isn't a sign of failure.
+            this.input.moreContentExpected = false;
+            return;
+          }
+          const numberChars = buf.slice(0, i);
+          this.input.buffer = buf.slice(i);
+          const number = parseJsonNumber(numberChars);
+          this.#emit(JsonTokenType.Number, number);
+          this.#stack.pop();
           return;
         }
-        const numberChars = buf.slice(0, i);
-        this.input.buffer = buf.slice(i);
-        const number = parseJsonNumber(numberChars);
-        this.#emit(JsonTokenType.Number, number);
-        this.#stack.pop();
-        return;
       }
-    }
     }
     if (this.input.tryToTakePrefix('"')) {
       this.#stack.pop();
