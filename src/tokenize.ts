@@ -225,11 +225,6 @@ export class Tokenizer {
     while (true) {
       const [chunk, interrupted] = this.input.takeUntilQuoteOrBackslash();
       if (chunk.length > 0) {
-        // A string middle can't have a control character, newline, or tab
-        // eslint-disable-next-line no-control-regex
-        if (/[\x00-\x1f]/.test(chunk)) {
-          throw new Error('Unescaped control character in string');
-        }
         this.#emit(JsonTokenType.StringMiddle, chunk);
       } else if (!interrupted) {
         // We've parsed everything we can in the buffer.
@@ -616,6 +611,9 @@ class Input {
     let i = 0;
     while (i < buf.length) {
       const c = buf.charCodeAt(i);
+      if (c <= 0x1f) {
+        throw new Error('Unescaped control character in string');
+      }
       if (c === 34 || c === 92) {
         const result = buf.slice(0, i);
         this.buffer = buf.slice(i);
