@@ -6,11 +6,41 @@
 
 import * as assert from 'node:assert/strict';
 import {test, suite} from 'node:test';
-import {tokenize, JsonTokenType} from '../tokenize.js';
+import {
+  JsonTokenType,
+  TokenHandler,
+  tokenize as rawTokenize,
+} from '../tokenize.js';
 import {makeStream, toArray} from './utils.js';
 
 async function toFlatArray<T>(iter: AsyncIterable<T[]>): Promise<T[]> {
   return (await toArray(iter)).flat();
+}
+
+async function* tokenize(stream: AsyncIterable<string>): AsyncIterable<
+  Array<{
+    type: JsonTokenType;
+    value: string | number | boolean | undefined;
+  }>
+> {
+  class Handler implements TokenHandler {
+    tokens: Array<{
+      type: JsonTokenType;
+      value: string | number | boolean | undefined;
+    }> = [];
+    handleToken(
+      type: JsonTokenType,
+      value: string | number | boolean | undefined,
+    ): void {
+      this.tokens.push({type, value});
+    }
+  }
+  const handler = new Handler();
+  const tokenizer = rawTokenize(stream, handler);
+  while (!tokenizer.isDone()) {
+    await tokenizer.pump();
+  }
+  yield handler.tokens;
 }
 
 suite('tokenizeJsonStream', () => {
@@ -54,7 +84,9 @@ suite('tokenizeJsonStream', () => {
   test('can tokenize a string with one character', async () => {
     const tokens = tokenize(makeStream('"a"'));
     assert.deepEqual(await toFlatArray(tokens), [
-      {type: JsonTokenType.String, value: 'a'},
+      {type: JsonTokenType.StringStart, value: undefined},
+      {type: JsonTokenType.StringMiddle, value: 'a'},
+      {type: JsonTokenType.StringEnd, value: undefined},
     ]);
   });
   test('can tokenize a chunked string', async () => {
@@ -77,7 +109,13 @@ suite('tokenizeJsonStream', () => {
   test('can tokenize a string with escapes', async () => {
     const tokens = tokenize(makeStream(JSON.stringify('"\\\n\u2028\t')));
     assert.deepEqual(await toFlatArray(tokens), [
-      {type: JsonTokenType.String, value: '"\\\n\u2028\t'},
+      {type: JsonTokenType.StringStart, value: undefined},
+      {type: JsonTokenType.StringMiddle, value: '"'},
+      {type: JsonTokenType.StringMiddle, value: '\\'},
+      {type: JsonTokenType.StringMiddle, value: '\n'},
+      {type: JsonTokenType.StringMiddle, value: '\u2028'},
+      {type: JsonTokenType.StringMiddle, value: '\t'},
+      {type: JsonTokenType.StringEnd, value: undefined},
     ]);
   });
   test('can tokenize an empty object', async () => {
@@ -91,7 +129,9 @@ suite('tokenizeJsonStream', () => {
     const tokens = tokenize(makeStream('{"a": null}'));
     assert.deepEqual(await toFlatArray(tokens), [
       {type: JsonTokenType.ObjectStart, value: undefined},
-      {type: JsonTokenType.String, value: 'a'},
+      {type: JsonTokenType.StringStart, value: undefined},
+      {type: JsonTokenType.StringMiddle, value: 'a'},
+      {type: JsonTokenType.StringEnd, value: undefined},
       {type: JsonTokenType.Null, value: undefined},
       {type: JsonTokenType.ObjectEnd, value: undefined},
     ]);
@@ -100,9 +140,13 @@ suite('tokenizeJsonStream', () => {
     const tokens = tokenize(makeStream('{"a": null, "b": true}'));
     assert.deepEqual(await toFlatArray(tokens), [
       {type: JsonTokenType.ObjectStart, value: undefined},
-      {type: JsonTokenType.String, value: 'a'},
+      {type: JsonTokenType.StringStart, value: undefined},
+      {type: JsonTokenType.StringMiddle, value: 'a'},
+      {type: JsonTokenType.StringEnd, value: undefined},
       {type: JsonTokenType.Null, value: undefined},
-      {type: JsonTokenType.String, value: 'b'},
+      {type: JsonTokenType.StringStart, value: undefined},
+      {type: JsonTokenType.StringMiddle, value: 'b'},
+      {type: JsonTokenType.StringEnd, value: undefined},
       {type: JsonTokenType.Boolean, value: true},
       {type: JsonTokenType.ObjectEnd, value: undefined},
     ]);
