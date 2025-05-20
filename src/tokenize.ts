@@ -148,37 +148,56 @@ export class Tokenizer {
       this.#stack.pop();
       return;
     }
-    if (/^[-0123456789]/.test(this.input.buffer)) {
-      // Slightly tricky spot, because numbers don't have a terminator,
-      // they might end on the end of input, or they might end because we hit
-      // a non-number character.
-      if (this.input.bufferComplete) {
-        const match = this.input.buffer.match(/^[-+0123456789eE.]+/);
-        if (!match) {
-          throw new Error('Invalid number');
-        }
-        this.input.buffer = this.input.buffer.slice(match[0].length);
-        const number = parseJsonNumber(match[0]);
-        this.#emit(JsonTokenType.Number, number);
-        this.#stack.pop();
-        this.input.moreContentExpected = true;
-        return;
-      } else {
-        // match up to the first non-number character
-        const match = this.input.buffer.match(/[^-+0123456789eE.]/);
-        if (!match) {
-          // Return to expand the buffer, but since there's no terminator
-          // for a number, we need to mark that finding the end of the input
-          // isn't a sign of failure.
-          this.input.moreContentExpected = false;
+    if (this.input.buffer.length > 0) {
+      const ch = this.input.buffer.charCodeAt(0);
+      if ((ch >= 48 && ch <= 57) || ch === 45) {
+        // Slightly tricky spot, because numbers don't have a terminator,
+        // they might end on the end of input, or they might end because we hit
+        // a non-number character.
+        if (this.input.bufferComplete) {
+          const match = this.input.buffer.match(/^[-+0123456789eE.]+/);
+          if (!match) {
+            throw new Error('Invalid number');
+          }
+          this.input.buffer = this.input.buffer.slice(match[0].length);
+          const number = parseJsonNumber(match[0]);
+          this.#emit(JsonTokenType.Number, number);
+          this.#stack.pop();
+          this.input.moreContentExpected = true;
+          return;
+        } else {
+          // find first non-number character
+          let i = 0;
+          const buf = this.input.buffer;
+          while (i < buf.length) {
+            const c = buf.charCodeAt(i);
+            if (
+              (c >= 48 && c <= 57) ||
+              c === 45 ||
+              c === 43 ||
+              c === 46 ||
+              c === 101 ||
+              c === 69
+            ) {
+              i++;
+            } else {
+              break;
+            }
+          }
+          if (i === buf.length) {
+            // Return to expand the buffer, but since there's no terminator
+            // for a number, we need to mark that finding the end of the input
+            // isn't a sign of failure.
+            this.input.moreContentExpected = false;
+            return;
+          }
+          const numberChars = buf.slice(0, i);
+          this.input.buffer = buf.slice(i);
+          const number = parseJsonNumber(numberChars);
+          this.#emit(JsonTokenType.Number, number);
+          this.#stack.pop();
           return;
         }
-        const numberChars = this.input.buffer.slice(0, match.index);
-        this.input.buffer = this.input.buffer.slice(match.index);
-        const number = parseJsonNumber(numberChars);
-        this.#emit(JsonTokenType.Number, number);
-        this.#stack.pop();
-        return;
       }
     }
     if (this.input.tryToTakePrefix('"')) {
@@ -204,7 +223,7 @@ export class Tokenizer {
 
   #tokenizeString() {
     while (true) {
-      const [chunk, interrupted] = this.input.takeUntil(/["\\]/);
+      const [chunk, interrupted] = this.input.takeUntilQuoteOrBackslash();
       if (chunk.length > 0) {
         // A string middle can't have a control character, newline, or tab
         // eslint-disable-next-line no-control-regex
@@ -586,5 +605,25 @@ class Input {
     const result = this.buffer;
     this.buffer = '';
     return [result, false];
+  }
+
+  /**
+   * Optimized version of {@link takeUntil} for locating either a
+   * double quote or backslash character.
+   */
+  takeUntilQuoteOrBackslash(): [string, boolean] {
+    const buf = this.buffer;
+    let i = 0;
+    while (i < buf.length) {
+      const c = buf.charCodeAt(i);
+      if (c === 34 || c === 92) {
+        const result = buf.slice(0, i);
+        this.buffer = buf.slice(i);
+        return [result, true];
+      }
+      i++;
+    }
+    this.buffer = '';
+    return [buf, false];
   }
 }
