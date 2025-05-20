@@ -32,13 +32,89 @@ const enum State {
   BeforeObjectKey,
 }
 
-const jsonNumberPattern = /^-?(0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?$/;
-
 function parseJsonNumber(str: string): number {
-  if (!jsonNumberPattern.test(str)) {
+  let i = 0;
+  const len = str.length;
+  if (str.charCodeAt(i) === 45) {
+    i++;
+  }
+  if (i >= len) {
+    throw new Error('Invalid number');
+  }
+  const first = str.charCodeAt(i);
+  if (first === 48) {
+    i++;
+  } else if (first >= 49 && first <= 57) {
+    i++;
+    while (i < len) {
+      const c = str.charCodeAt(i);
+      if (c >= 48 && c <= 57) {
+        i++;
+      } else {
+        break;
+      }
+    }
+  } else {
+    throw new Error('Invalid number');
+  }
+  if (i < len && str.charCodeAt(i) === 46) {
+    i++;
+    if (i >= len || str.charCodeAt(i) < 48 || str.charCodeAt(i) > 57) {
+      throw new Error('Invalid number');
+    }
+    while (i < len) {
+      const c = str.charCodeAt(i);
+      if (c >= 48 && c <= 57) {
+        i++;
+      } else {
+        break;
+      }
+    }
+  }
+  if (
+    i < len &&
+    (str.charCodeAt(i) === 101 || str.charCodeAt(i) === 69)
+  ) {
+    i++;
+    if (i < len && (str.charCodeAt(i) === 43 || str.charCodeAt(i) === 45)) {
+      i++;
+    }
+    if (i >= len || str.charCodeAt(i) < 48 || str.charCodeAt(i) > 57) {
+      throw new Error('Invalid number');
+    }
+    while (i < len) {
+      const c = str.charCodeAt(i);
+      if (c >= 48 && c <= 57) {
+        i++;
+      } else {
+        break;
+      }
+    }
+  }
+  if (i !== len) {
     throw new Error('Invalid number');
   }
   return Number(str);
+}
+
+function scanNumberPrefix(buf: string): number {
+  let i = 0;
+  while (i < buf.length) {
+    const c = buf.charCodeAt(i);
+    if (
+      (c >= 48 && c <= 57) ||
+      c === 45 ||
+      c === 43 ||
+      c === 46 ||
+      c === 101 ||
+      c === 69
+    ) {
+      i++;
+    } else {
+      break;
+    }
+  }
+  return i;
 }
 
 export class Tokenizer {
@@ -151,39 +227,17 @@ export class Tokenizer {
     if (this.input.buffer.length > 0) {
       const ch = this.input.buffer.charCodeAt(0);
       if ((ch >= 48 && ch <= 57) || ch === 45) {
-        // Slightly tricky spot, because numbers don't have a terminator,
-        // they might end on the end of input, or they might end because we hit
-        // a non-number character.
+        const buf = this.input.buffer;
+        const i = scanNumberPrefix(buf);
         if (this.input.bufferComplete) {
-          const match = this.input.buffer.match(/^[-+0123456789eE.]+/);
-          if (!match) {
-            throw new Error('Invalid number');
-          }
-          this.input.buffer = this.input.buffer.slice(match[0].length);
-          const number = parseJsonNumber(match[0]);
+          const numberChars = buf.slice(0, i);
+          this.input.buffer = buf.slice(i);
+          const number = parseJsonNumber(numberChars);
           this.#emit(JsonTokenType.Number, number);
           this.#stack.pop();
           this.input.moreContentExpected = true;
           return;
         } else {
-          // find first non-number character
-          let i = 0;
-          const buf = this.input.buffer;
-          while (i < buf.length) {
-            const c = buf.charCodeAt(i);
-            if (
-              (c >= 48 && c <= 57) ||
-              c === 45 ||
-              c === 43 ||
-              c === 46 ||
-              c === 101 ||
-              c === 69
-            ) {
-              i++;
-            } else {
-              break;
-            }
-          }
           if (i === buf.length) {
             // Return to expand the buffer, but since there's no terminator
             // for a number, we need to mark that finding the end of the input
@@ -225,10 +279,10 @@ export class Tokenizer {
     while (true) {
       const [chunk, interrupted] = this.input.takeUntilQuoteOrBackslash();
       if (chunk.length > 0) {
-        // A string middle can't have a control character, newline, or tab
-        // eslint-disable-next-line no-control-regex
-        if (/[\x00-\x1f]/.test(chunk)) {
-          throw new Error('Unescaped control character in string');
+        for (let j = 0; j < chunk.length; j++) {
+          if (chunk.charCodeAt(j) < 32) {
+            throw new Error('Unescaped control character in string');
+          }
         }
         this.#emit(JsonTokenType.StringMiddle, chunk);
       } else if (!interrupted) {
@@ -259,14 +313,23 @@ export class Tokenizer {
             return;
           }
           const hex = this.input.buffer.slice(2, 6);
-          if (!/^[0-9a-fA-F]{4}$/.test(hex)) {
-            throw new Error('Bad Unicode escape in JSON');
+          let code = 0;
+          for (let k = 0; k < 4; k++) {
+            const c = hex.charCodeAt(k);
+            let v;
+            if (c >= 48 && c <= 57) {
+              v = c - 48;
+            } else if (c >= 65 && c <= 70) {
+              v = c - 55;
+            } else if (c >= 97 && c <= 102) {
+              v = c - 87;
+            } else {
+              throw new Error('Bad Unicode escape in JSON');
+            }
+            code = (code << 4) | v;
           }
           this.input.buffer = this.input.buffer.slice(6);
-          this.#emit(
-            JsonTokenType.StringMiddle,
-            String.fromCharCode(parseInt(hex, 16)),
-          );
+          this.#emit(JsonTokenType.StringMiddle, String.fromCharCode(code));
           continue;
         } else {
           this.input.buffer = this.input.buffer.slice(2);
@@ -613,17 +676,22 @@ class Input {
    */
   takeUntilQuoteOrBackslash(): [string, boolean] {
     const buf = this.buffer;
-    let i = 0;
-    while (i < buf.length) {
-      const c = buf.charCodeAt(i);
-      if (c === 34 || c === 92) {
-        const result = buf.slice(0, i);
-        this.buffer = buf.slice(i);
-        return [result, true];
-      }
-      i++;
+    const quote = buf.indexOf('"');
+    const backslash = buf.indexOf('\\');
+    let i;
+    if (quote === -1) {
+      i = backslash;
+    } else if (backslash === -1) {
+      i = quote;
+    } else {
+      i = quote < backslash ? quote : backslash;
     }
-    this.buffer = '';
-    return [buf, false];
+    if (i === -1) {
+      this.buffer = '';
+      return [buf, false];
+    }
+    const result = buf.slice(0, i);
+    this.buffer = buf.slice(i);
+    return [result, true];
   }
 }
