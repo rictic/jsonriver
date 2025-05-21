@@ -156,50 +156,38 @@ export class Tokenizer {
         // Slightly tricky spot, because numbers don't have a terminator,
         // they might end on the end of input, or they might end because we hit
         // a non-number character.
-        if (this.input.bufferComplete) {
-          const match = this.input.remaining().match(/^[-+0123456789eE.]+/);
-          if (!match) {
-            throw new Error('Invalid number');
+        // Scan for the end of the number without allocating the entire
+        // remaining buffer.
+        let i = 0;
+        while (i < this.input.length) {
+          const c = this.input.peekCharCode(i);
+          if (
+            (c >= 48 && c <= 57) ||
+            c === 45 ||
+            c === 43 ||
+            c === 46 ||
+            c === 101 ||
+            c === 69
+          ) {
+            i++;
+          } else {
+            break;
           }
-          this.input.advance(match[0].length);
-          const number = parseJsonNumber(match[0]);
-          this.#emit(JsonTokenType.Number, number);
-          this.#stack.pop();
-          this.input.moreContentExpected = true;
-          return;
-        } else {
-          // find first non-number character
-          let i = 0;
-          const buf = this.input.remaining();
-          while (i < buf.length) {
-            const c = buf.charCodeAt(i);
-            if (
-              (c >= 48 && c <= 57) ||
-              c === 45 ||
-              c === 43 ||
-              c === 46 ||
-              c === 101 ||
-              c === 69
-            ) {
-              i++;
-            } else {
-              break;
-            }
-          }
-          if (i === buf.length) {
-            // Return to expand the buffer, but since there's no terminator
-            // for a number, we need to mark that finding the end of the input
-            // isn't a sign of failure.
-            this.input.moreContentExpected = false;
-            return;
-          }
-          const numberChars = buf.slice(0, i);
-          this.input.advance(i);
-          const number = parseJsonNumber(numberChars);
-          this.#emit(JsonTokenType.Number, number);
-          this.#stack.pop();
+        }
+        if (i === this.input.length && !this.input.bufferComplete) {
+          // Return to expand the buffer, but since there's no terminator for a
+          // number, we need to mark that finding the end of the input isn't a
+          // sign of failure.
+          this.input.moreContentExpected = false;
           return;
         }
+        const numberChars = this.input.slice(0, i);
+        this.input.advance(i);
+        const number = parseJsonNumber(numberChars);
+        this.#emit(JsonTokenType.Number, number);
+        this.#stack.pop();
+        this.input.moreContentExpected = true;
+        return;
       }
     }
     if (this.input.tryToTakePrefix('"')) {
@@ -255,15 +243,24 @@ export class Tokenizer {
           if (this.input.length < 6) {
             return;
           }
-          const hex = this.input.slice(2, 6);
-          if (!/^[0-9a-fA-F]{4}$/.test(hex)) {
-            throw new Error('Bad Unicode escape in JSON');
+          let code = 0;
+          for (let j = 2; j < 6; j++) {
+            const c = this.input.peekCharCode(j);
+            const digit =
+              c >= 48 && c <= 57
+                ? c - 48
+                : c >= 65 && c <= 70
+                  ? c - 55
+                  : c >= 97 && c <= 102
+                    ? c - 87
+                    : -1;
+            if (digit === -1) {
+              throw new Error('Bad Unicode escape in JSON');
+            }
+            code = (code << 4) | digit;
           }
           this.input.advance(6);
-          this.#emit(
-            JsonTokenType.StringMiddle,
-            String.fromCharCode(parseInt(hex, 16)),
-          );
+          this.#emit(JsonTokenType.StringMiddle, String.fromCharCode(code));
           continue;
         } else {
           this.input.advance(2);
@@ -321,39 +318,46 @@ export class Tokenizer {
 
   #tokenizeAfterArrayValue() {
     this.input.skipPastWhitespace();
-    const nextChar = this.input.tryToTake(1);
+    const nextChar = this.input.tryToTakeCharCode();
     switch (nextChar) {
       case undefined: {
         return;
       }
-      case ']': {
+      case 0x5d: {
+        // ']'
         this.#emit(JsonTokenType.ArrayEnd, undefined);
         this.#stack.pop();
         return;
       }
-      case ',': {
+      case 0x2c: {
+        // ','
         this.#stack.push(State.ExpectingValue);
         return this.#tokenizeValue();
       }
       default: {
-        throw new Error('Expected , or ], got ' + JSON.stringify(nextChar));
+        throw new Error(
+          'Expected , or ], got ' +
+            JSON.stringify(String.fromCharCode(nextChar)),
+        );
       }
     }
   }
 
   #tokenizeObjectStart() {
     this.input.skipPastWhitespace();
-    const nextChar = this.input.tryToTake(1);
+    const nextChar = this.input.tryToTakeCharCode();
     switch (nextChar) {
       case undefined: {
         return;
       }
-      case '}': {
+      case 0x7d: {
+        // '}'
         this.#emit(JsonTokenType.ObjectEnd, undefined);
         this.#stack.pop();
         return;
       }
-      case '"': {
+      case 0x22: {
+        // '"'
         this.#stack.pop();
         this.#stack.push(State.AfterObjectKey);
         this.#stack.push(State.InString);
@@ -361,61 +365,74 @@ export class Tokenizer {
         return this.#tokenizeString();
       }
       default: {
-        throw new Error('Expected start of object key, got ' + nextChar);
+        throw new Error(
+          'Expected start of object key, got ' +
+            JSON.stringify(String.fromCharCode(nextChar)),
+        );
       }
     }
   }
 
   #tokenizeAfterObjectKey() {
     this.input.skipPastWhitespace();
-    const nextChar = this.input.tryToTake(1);
+    const nextChar = this.input.tryToTakeCharCode();
     switch (nextChar) {
       case undefined: {
         return;
       }
-      case ':': {
+      case 0x3a: {
+        // ':'
         this.#stack.pop();
         this.#stack.push(State.AfterObjectValue);
         this.#stack.push(State.ExpectingValue);
         return this.#tokenizeValue();
       }
       default: {
-        throw new Error('Expected colon after object key, got ' + nextChar);
+        throw new Error(
+          'Expected colon after object key, got ' +
+            JSON.stringify(String.fromCharCode(nextChar)),
+        );
       }
     }
   }
 
   #tokenizeAfterObjectValue() {
     this.input.skipPastWhitespace();
-    const nextChar = this.input.tryToTake(1);
+    const nextChar = this.input.tryToTakeCharCode();
     switch (nextChar) {
       case undefined: {
         return;
       }
-      case '}': {
+      case 0x7d: {
+        // '}'
         this.#emit(JsonTokenType.ObjectEnd, undefined);
         this.#stack.pop();
         return;
       }
-      case ',': {
+      case 0x2c: {
+        // ','
         this.#stack.pop();
         this.#stack.push(State.BeforeObjectKey);
         return this.#tokenizeBeforeObjectKey();
       }
       default: {
-        throw new Error('Expected , or } after object value, got ' + nextChar);
+        throw new Error(
+          'Expected , or } after object value, got ' +
+            JSON.stringify(String.fromCharCode(nextChar)),
+        );
       }
     }
   }
 
   #tokenizeBeforeObjectKey() {
     this.input.skipPastWhitespace();
-    const nextChar = this.input.tryToTake(1);
+    const nextChar = this.input.tryToTakeCharCode();
     switch (nextChar) {
       case undefined: {
         return;
       }
-      case '"': {
+      case 0x22: {
+        // '"'
         this.#stack.pop();
         this.#stack.push(State.AfterObjectKey);
         this.#stack.push(State.InString);
@@ -423,7 +440,10 @@ export class Tokenizer {
         return this.#tokenizeString();
       }
       default: {
-        throw new Error('Expected start of object key, got ' + nextChar);
+        throw new Error(
+          'Expected start of object key, got ' +
+            JSON.stringify(String.fromCharCode(nextChar)),
+        );
       }
     }
   }
@@ -616,29 +636,26 @@ class Input {
   }
 
   /**
-   * Consumes and returns the input up to the first match of the given pattern.
+   * Tries to take a single character from the buffer and returns its code.
    *
-   * If the pattern is not found, consumes the entire buffer and returns it.
-   *
-   * Returns a tuple of the consumed content and a boolean indicating whether
-   * the pattern was found.
+   * If there are no characters in the buffer, returns undefined.
    */
-  takeUntil(pattern: RegExp): [string, boolean] {
-    const slice = this.#buffer.slice(this.#startIndex);
-    const match = pattern.exec(slice);
-    if (match) {
-      const result = slice.slice(0, match.index);
-      this.#startIndex += match.index;
-      return [result, true];
+  tryToTakeCharCode(): number | undefined {
+    if (this.length === 0) {
+      return undefined;
     }
-    const result = slice;
-    this.#startIndex = this.#buffer.length;
-    return [result, false];
+    const code = this.#buffer.charCodeAt(this.#startIndex);
+    this.#startIndex++;
+    return code;
   }
 
   /**
-   * Optimized version of {@link takeUntil} for locating either a
-   * double quote or backslash character.
+   * Consumes and returns the input up to the first quote or backslash.
+   *
+   * If neither not found, consumes the entire buffer and returns it.
+   *
+   * Returns a tuple of the consumed content and a boolean indicating whether
+   * the pattern was found.
    */
   takeUntilQuoteOrBackslash(): [string, boolean] {
     const buf = this.#buffer;
