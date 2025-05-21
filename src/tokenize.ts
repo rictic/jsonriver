@@ -321,39 +321,41 @@ export class Tokenizer {
 
   #tokenizeAfterArrayValue() {
     this.input.skipPastWhitespace();
-    const nextChar = this.input.tryToTake(1);
+    const nextChar = this.input.tryToTakeCharCode();
     switch (nextChar) {
       case undefined: {
         return;
       }
-      case ']': {
+      case 0x5d: { // ']'
         this.#emit(JsonTokenType.ArrayEnd, undefined);
         this.#stack.pop();
         return;
       }
-      case ',': {
+      case 0x2c: { // ','
         this.#stack.push(State.ExpectingValue);
         return this.#tokenizeValue();
       }
       default: {
-        throw new Error('Expected , or ], got ' + JSON.stringify(nextChar));
+        throw new Error(
+          'Expected , or ], got ' + JSON.stringify(String.fromCharCode(nextChar))
+        );
       }
     }
   }
 
   #tokenizeObjectStart() {
     this.input.skipPastWhitespace();
-    const nextChar = this.input.tryToTake(1);
+    const nextChar = this.input.tryToTakeCharCode();
     switch (nextChar) {
       case undefined: {
         return;
       }
-      case '}': {
+      case 0x7d: { // '}'
         this.#emit(JsonTokenType.ObjectEnd, undefined);
         this.#stack.pop();
         return;
       }
-      case '"': {
+      case 0x22: { // '"'
         this.#stack.pop();
         this.#stack.push(State.AfterObjectKey);
         this.#stack.push(State.InString);
@@ -361,61 +363,70 @@ export class Tokenizer {
         return this.#tokenizeString();
       }
       default: {
-        throw new Error('Expected start of object key, got ' + nextChar);
+        throw new Error(
+          'Expected start of object key, got ' +
+            JSON.stringify(String.fromCharCode(nextChar))
+        );
       }
     }
   }
 
   #tokenizeAfterObjectKey() {
     this.input.skipPastWhitespace();
-    const nextChar = this.input.tryToTake(1);
+    const nextChar = this.input.tryToTakeCharCode();
     switch (nextChar) {
       case undefined: {
         return;
       }
-      case ':': {
+      case 0x3a: { // ':'
         this.#stack.pop();
         this.#stack.push(State.AfterObjectValue);
         this.#stack.push(State.ExpectingValue);
         return this.#tokenizeValue();
       }
       default: {
-        throw new Error('Expected colon after object key, got ' + nextChar);
+        throw new Error(
+          'Expected colon after object key, got ' +
+            JSON.stringify(String.fromCharCode(nextChar))
+        );
       }
     }
   }
 
   #tokenizeAfterObjectValue() {
     this.input.skipPastWhitespace();
-    const nextChar = this.input.tryToTake(1);
+    const nextChar = this.input.tryToTakeCharCode();
     switch (nextChar) {
       case undefined: {
         return;
       }
-      case '}': {
+      case 0x7d: { // '}'
         this.#emit(JsonTokenType.ObjectEnd, undefined);
         this.#stack.pop();
         return;
       }
-      case ',': {
+      case 0x2c: { // ','
         this.#stack.pop();
         this.#stack.push(State.BeforeObjectKey);
         return this.#tokenizeBeforeObjectKey();
       }
       default: {
-        throw new Error('Expected , or } after object value, got ' + nextChar);
+        throw new Error(
+          'Expected , or } after object value, got ' +
+            JSON.stringify(String.fromCharCode(nextChar))
+        );
       }
     }
   }
 
   #tokenizeBeforeObjectKey() {
     this.input.skipPastWhitespace();
-    const nextChar = this.input.tryToTake(1);
+    const nextChar = this.input.tryToTakeCharCode();
     switch (nextChar) {
       case undefined: {
         return;
       }
-      case '"': {
+      case 0x22: { // '"'
         this.#stack.pop();
         this.#stack.push(State.AfterObjectKey);
         this.#stack.push(State.InString);
@@ -423,7 +434,10 @@ export class Tokenizer {
         return this.#tokenizeString();
       }
       default: {
-        throw new Error('Expected start of object key, got ' + nextChar);
+        throw new Error(
+          'Expected start of object key, got ' +
+            JSON.stringify(String.fromCharCode(nextChar))
+        );
       }
     }
   }
@@ -613,6 +627,34 @@ class Input {
     const result = this.#buffer.slice(this.#startIndex, this.#startIndex + len);
     this.#startIndex += len;
     return result;
+  }
+
+  /**
+   * Tries to take a single character from the buffer.
+   *
+   * If there are no characters in the buffer, returns undefined.
+   */
+  tryToTakeChar(): string | undefined {
+    if (this.length === 0) {
+      return undefined;
+    }
+    const result = this.#buffer[this.#startIndex];
+    this.#startIndex++;
+    return result;
+  }
+
+  /**
+   * Tries to take a single character from the buffer and returns its code.
+   *
+   * If there are no characters in the buffer, returns undefined.
+   */
+  tryToTakeCharCode(): number | undefined {
+    if (this.length === 0) {
+      return undefined;
+    }
+    const code = this.#buffer.charCodeAt(this.#startIndex);
+    this.#startIndex++;
+    return code;
   }
 
   /**
