@@ -54,12 +54,12 @@ if (mainBranchBundlePath) {
   };
 } else {
   const baselineModuleUrl = new URL(
-    './bundles/baseline.min.js',
+    './bundles/jsonriver-1.0.js',
     import.meta.url,
   ).href;
   const {parse} = await import(baselineModuleUrl);
   oldJsonRiver = {
-    name: 'jsonriver v0.1',
+    name: 'jsonriver v1.0',
     parse: async function jsonParseBaseline(jsonString) {
       let finalValue;
       for await (const val of parse(toStream(jsonString))) {
