@@ -19,11 +19,14 @@ const cases: Array<[string, string]> = [
   ['colon inside array', '["a": 1]'],
   ['unquoted key', '{a: 1}'],
   ['single quoted string', "'abc'"],
-  ['unescaped newline in string', `"hello
-world"`],
-  ['invalid escape sequence', "\"\\x20\""],
-  ['short unicode escape', "\"\\u123\""],
-  ['bad unicode escape', "\"\\uzzzz\""],
+  [
+    'unescaped newline in string',
+    `"hello
+world"`,
+  ],
+  ['invalid escape sequence', '"\\x20"'],
+  ['short unicode escape', '"\\u123"'],
+  ['bad unicode escape', '"\\uzzzz"'],
   ['leading zero', '01'],
   ['hexadecimal number', '0x1'],
   ['trailing decimal point', '1.'],
