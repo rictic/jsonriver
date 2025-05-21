@@ -79,6 +79,12 @@ Run the test suite with:
 npm test
 ```
 
+Format code before committing by running:
+
+```bash
+npm run format
+```
+
 Run the linter with:
 
 ```bash
@@ -90,3 +96,5 @@ And auto-fix most lint issues with:
 ```bash
 npm run lint -- --fix
 ```
+
+We use [`wireit`](https://github.com/google/wireit) so you don't need to manually run intermediate scripts like `npm run build`, they're automatically run when needed.
