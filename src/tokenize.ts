@@ -250,20 +250,17 @@ export class Tokenizer {
               c >= 48 && c <= 57
                 ? c - 48
                 : c >= 65 && c <= 70
-                ? c - 55
-                : c >= 97 && c <= 102
-                ? c - 87
-                : -1;
+                  ? c - 55
+                  : c >= 97 && c <= 102
+                    ? c - 87
+                    : -1;
             if (digit === -1) {
               throw new Error('Bad Unicode escape in JSON');
             }
             code = (code << 4) | digit;
           }
           this.input.advance(6);
-          this.#emit(
-            JsonTokenType.StringMiddle,
-            String.fromCharCode(code),
-          );
+          this.#emit(JsonTokenType.StringMiddle, String.fromCharCode(code));
           continue;
         } else {
           this.input.advance(2);
@@ -326,18 +323,21 @@ export class Tokenizer {
       case undefined: {
         return;
       }
-      case 0x5d: { // ']'
+      case 0x5d: {
+        // ']'
         this.#emit(JsonTokenType.ArrayEnd, undefined);
         this.#stack.pop();
         return;
       }
-      case 0x2c: { // ','
+      case 0x2c: {
+        // ','
         this.#stack.push(State.ExpectingValue);
         return this.#tokenizeValue();
       }
       default: {
         throw new Error(
-          'Expected , or ], got ' + JSON.stringify(String.fromCharCode(nextChar))
+          'Expected , or ], got ' +
+            JSON.stringify(String.fromCharCode(nextChar)),
         );
       }
     }
@@ -350,12 +350,14 @@ export class Tokenizer {
       case undefined: {
         return;
       }
-      case 0x7d: { // '}'
+      case 0x7d: {
+        // '}'
         this.#emit(JsonTokenType.ObjectEnd, undefined);
         this.#stack.pop();
         return;
       }
-      case 0x22: { // '"'
+      case 0x22: {
+        // '"'
         this.#stack.pop();
         this.#stack.push(State.AfterObjectKey);
         this.#stack.push(State.InString);
@@ -365,7 +367,7 @@ export class Tokenizer {
       default: {
         throw new Error(
           'Expected start of object key, got ' +
-            JSON.stringify(String.fromCharCode(nextChar))
+            JSON.stringify(String.fromCharCode(nextChar)),
         );
       }
     }
@@ -378,7 +380,8 @@ export class Tokenizer {
       case undefined: {
         return;
       }
-      case 0x3a: { // ':'
+      case 0x3a: {
+        // ':'
         this.#stack.pop();
         this.#stack.push(State.AfterObjectValue);
         this.#stack.push(State.ExpectingValue);
@@ -387,7 +390,7 @@ export class Tokenizer {
       default: {
         throw new Error(
           'Expected colon after object key, got ' +
-            JSON.stringify(String.fromCharCode(nextChar))
+            JSON.stringify(String.fromCharCode(nextChar)),
         );
       }
     }
@@ -400,12 +403,14 @@ export class Tokenizer {
       case undefined: {
         return;
       }
-      case 0x7d: { // '}'
+      case 0x7d: {
+        // '}'
         this.#emit(JsonTokenType.ObjectEnd, undefined);
         this.#stack.pop();
         return;
       }
-      case 0x2c: { // ','
+      case 0x2c: {
+        // ','
         this.#stack.pop();
         this.#stack.push(State.BeforeObjectKey);
         return this.#tokenizeBeforeObjectKey();
@@ -413,7 +418,7 @@ export class Tokenizer {
       default: {
         throw new Error(
           'Expected , or } after object value, got ' +
-            JSON.stringify(String.fromCharCode(nextChar))
+            JSON.stringify(String.fromCharCode(nextChar)),
         );
       }
     }
@@ -426,7 +431,8 @@ export class Tokenizer {
       case undefined: {
         return;
       }
-      case 0x22: { // '"'
+      case 0x22: {
+        // '"'
         this.#stack.pop();
         this.#stack.push(State.AfterObjectKey);
         this.#stack.push(State.InString);
@@ -436,7 +442,7 @@ export class Tokenizer {
       default: {
         throw new Error(
           'Expected start of object key, got ' +
-            JSON.stringify(String.fromCharCode(nextChar))
+            JSON.stringify(String.fromCharCode(nextChar)),
         );
       }
     }
