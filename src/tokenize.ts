@@ -636,20 +636,6 @@ class Input {
   }
 
   /**
-   * Tries to take a single character from the buffer.
-   *
-   * If there are no characters in the buffer, returns undefined.
-   */
-  tryToTakeChar(): string | undefined {
-    if (this.length === 0) {
-      return undefined;
-    }
-    const result = this.#buffer[this.#startIndex];
-    this.#startIndex++;
-    return result;
-  }
-
-  /**
    * Tries to take a single character from the buffer and returns its code.
    *
    * If there are no characters in the buffer, returns undefined.
@@ -664,29 +650,12 @@ class Input {
   }
 
   /**
-   * Consumes and returns the input up to the first match of the given pattern.
+   * Consumes and returns the input up to the first quote or backslash.
    *
-   * If the pattern is not found, consumes the entire buffer and returns it.
+   * If neither not found, consumes the entire buffer and returns it.
    *
    * Returns a tuple of the consumed content and a boolean indicating whether
    * the pattern was found.
-   */
-  takeUntil(pattern: RegExp): [string, boolean] {
-    const slice = this.#buffer.slice(this.#startIndex);
-    const match = pattern.exec(slice);
-    if (match) {
-      const result = slice.slice(0, match.index);
-      this.#startIndex += match.index;
-      return [result, true];
-    }
-    const result = slice;
-    this.#startIndex = this.#buffer.length;
-    return [result, false];
-  }
-
-  /**
-   * Optimized version of {@link takeUntil} for locating either a
-   * double quote or backslash character.
    */
   takeUntilQuoteOrBackslash(): [string, boolean] {
     const buf = this.#buffer;
