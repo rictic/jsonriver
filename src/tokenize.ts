@@ -53,7 +53,7 @@ export class Tokenizer {
   }
 
   isDone(): boolean {
-    return this.#stack.length === 0 && this.input.buffer.length === 0;
+    return this.#stack.length === 0 && this.input.length === 0;
   }
 
   async pump(): Promise<void> {
@@ -69,10 +69,12 @@ export class Tokenizer {
       if (this.#emittedTokens > start) {
         // We emitted at least one token and can't make more progress without
         // additional input.
+        this.input.commit();
         return;
       }
       if (this.#stack.length === 0) {
         await this.input.expectEndOfContent();
+        this.input.commit();
         return;
       }
       const expanded = await this.input.tryToExpandBuffer();
@@ -148,18 +150,18 @@ export class Tokenizer {
       this.#stack.pop();
       return;
     }
-    if (this.input.buffer.length > 0) {
-      const ch = this.input.buffer.charCodeAt(0);
+    if (this.input.length > 0) {
+      const ch = this.input.peekCharCode(0);
       if ((ch >= 48 && ch <= 57) || ch === 45) {
         // Slightly tricky spot, because numbers don't have a terminator,
         // they might end on the end of input, or they might end because we hit
         // a non-number character.
         if (this.input.bufferComplete) {
-          const match = this.input.buffer.match(/^[-+0123456789eE.]+/);
+          const match = this.input.remaining().match(/^[-+0123456789eE.]+/);
           if (!match) {
             throw new Error('Invalid number');
           }
-          this.input.buffer = this.input.buffer.slice(match[0].length);
+          this.input.advance(match[0].length);
           const number = parseJsonNumber(match[0]);
           this.#emit(JsonTokenType.Number, number);
           this.#stack.pop();
@@ -168,7 +170,7 @@ export class Tokenizer {
         } else {
           // find first non-number character
           let i = 0;
-          const buf = this.input.buffer;
+          const buf = this.input.remaining();
           while (i < buf.length) {
             const c = buf.charCodeAt(i);
             if (
@@ -192,7 +194,7 @@ export class Tokenizer {
             return;
           }
           const numberChars = buf.slice(0, i);
-          this.input.buffer = buf.slice(i);
+          this.input.advance(i);
           const number = parseJsonNumber(numberChars);
           this.#emit(JsonTokenType.Number, number);
           this.#stack.pop();
@@ -231,40 +233,40 @@ export class Tokenizer {
         return;
       }
       if (interrupted) {
-        if (this.input.buffer.length === 0) {
+        if (this.input.length === 0) {
           // Can't continue without more input.
           return;
         }
-        const nextChar = this.input.buffer[0];
+        const nextChar = this.input.peek(0);
         if (nextChar === '"') {
-          this.input.buffer = this.input.buffer.slice(1);
+          this.input.advance(1);
           this.#emit(JsonTokenType.StringEnd, undefined);
           this.#stack.pop();
           return;
         }
         // string escapes
-        const nextChar2 = this.input.buffer[1];
+        const nextChar2 = this.input.peek(1);
         if (nextChar2 === undefined) {
           // Can't continue without more input.
           return;
         }
         if (nextChar2 === 'u') {
           // need 4 more characters
-          if (this.input.buffer.length < 6) {
+          if (this.input.length < 6) {
             return;
           }
-          const hex = this.input.buffer.slice(2, 6);
+          const hex = this.input.slice(2, 6);
           if (!/^[0-9a-fA-F]{4}$/.test(hex)) {
             throw new Error('Bad Unicode escape in JSON');
           }
-          this.input.buffer = this.input.buffer.slice(6);
+          this.input.advance(6);
           this.#emit(
             JsonTokenType.StringMiddle,
             String.fromCharCode(parseInt(hex, 16)),
           );
           continue;
         } else {
-          this.input.buffer = this.input.buffer.slice(2);
+          this.input.advance(2);
         }
         let value;
         switch (nextChar2) {
@@ -302,7 +304,7 @@ export class Tokenizer {
 
   #tokenizeArrayStart() {
     this.input.skipPastWhitespace();
-    if (this.input.buffer.length === 0) {
+    if (this.input.length === 0) {
       return;
     }
     if (this.input.tryToTakePrefix(']')) {
@@ -494,13 +496,45 @@ export interface NumberToken {
  * Now that we're doing all the work synchronously, it's a bit overkill.
  */
 class Input {
-  buffer = '';
+  #buffer = '';
+  #startIndex = 0;
   // True if no more content will be added to the buffer.
   bufferComplete = false;
   moreContentExpected = true;
   #stream: AsyncIterator<string>;
   constructor(stream: AsyncIterable<string>) {
     this.#stream = stream[Symbol.asyncIterator]();
+  }
+
+  get length(): number {
+    return this.#buffer.length - this.#startIndex;
+  }
+
+  advance(len: number) {
+    this.#startIndex += len;
+  }
+
+  peek(offset: number): string | undefined {
+    return this.#buffer[this.#startIndex + offset];
+  }
+
+  peekCharCode(offset: number): number {
+    return this.#buffer.charCodeAt(this.#startIndex + offset);
+  }
+
+  slice(start: number, end: number): string {
+    return this.#buffer.slice(this.#startIndex + start, this.#startIndex + end);
+  }
+
+  commit() {
+    if (this.#startIndex > 0) {
+      this.#buffer = this.#buffer.slice(this.#startIndex);
+      this.#startIndex = 0;
+    }
+  }
+
+  remaining(): string {
+    return this.#buffer.slice(this.#startIndex);
   }
 
   /**
@@ -510,10 +544,11 @@ class Input {
   async expectEndOfContent() {
     this.moreContentExpected = false;
     const check = () => {
-      this.buffer = this.buffer.trim();
-      if (this.buffer.length !== 0) {
+      this.commit();
+      this.#buffer = this.#buffer.trim();
+      if (this.#buffer.length !== 0) {
         throw new Error(
-          `Unexpected trailing content ${JSON.stringify(this.buffer)}`,
+          `Unexpected trailing content ${JSON.stringify(this.#buffer)}`,
         );
       }
     };
@@ -538,31 +573,29 @@ class Input {
       }
       return false;
     }
-    this.buffer += result.value;
+    this.#buffer += result.value;
     return true;
   }
 
   skipPastWhitespace() {
-    let i = 0;
-    while (i < this.buffer.length) {
-      const c = this.buffer.charCodeAt(i);
+    let i = this.#startIndex;
+    while (i < this.#buffer.length) {
+      const c = this.#buffer.charCodeAt(i);
       if (c === 32 || c === 9 || c === 10 || c === 13) {
         i++;
       } else {
         break;
       }
     }
-    if (i > 0) {
-      this.buffer = this.buffer.slice(i);
-    }
+    this.#startIndex = i;
   }
 
   /**
    * If the buffer starts with `prefix`, consumes it and returns true.
    */
   tryToTakePrefix(prefix: string): boolean {
-    if (this.buffer.startsWith(prefix)) {
-      this.buffer = this.buffer.slice(prefix.length);
+    if (this.#buffer.startsWith(prefix, this.#startIndex)) {
+      this.#startIndex += prefix.length;
       return true;
     }
     return false;
@@ -574,11 +607,11 @@ class Input {
    * If there are fewer than `len` characters in the buffer, returns undefined.
    */
   tryToTake(len: number): string | undefined {
-    if (this.buffer.length < len) {
+    if (this.length < len) {
       return undefined;
     }
-    const result = this.buffer.slice(0, len);
-    this.buffer = this.buffer.slice(len);
+    const result = this.#buffer.slice(this.#startIndex, this.#startIndex + len);
+    this.#startIndex += len;
     return result;
   }
 
@@ -591,14 +624,15 @@ class Input {
    * the pattern was found.
    */
   takeUntil(pattern: RegExp): [string, boolean] {
-    const match = pattern.exec(this.buffer);
+    const slice = this.#buffer.slice(this.#startIndex);
+    const match = pattern.exec(slice);
     if (match) {
-      const result = this.buffer.slice(0, match.index);
-      this.buffer = this.buffer.slice(match.index);
+      const result = slice.slice(0, match.index);
+      this.#startIndex += match.index;
       return [result, true];
     }
-    const result = this.buffer;
-    this.buffer = '';
+    const result = slice;
+    this.#startIndex = this.#buffer.length;
     return [result, false];
   }
 
@@ -607,21 +641,22 @@ class Input {
    * double quote or backslash character.
    */
   takeUntilQuoteOrBackslash(): [string, boolean] {
-    const buf = this.buffer;
-    let i = 0;
+    const buf = this.#buffer;
+    let i = this.#startIndex;
     while (i < buf.length) {
       const c = buf.charCodeAt(i);
       if (c <= 0x1f) {
         throw new Error('Unescaped control character in string');
       }
       if (c === 34 || c === 92) {
-        const result = buf.slice(0, i);
-        this.buffer = buf.slice(i);
+        const result = buf.slice(this.#startIndex, i);
+        this.#startIndex = i;
         return [result, true];
       }
       i++;
     }
-    this.buffer = '';
-    return [buf, false];
+    const result = buf.slice(this.#startIndex);
+    this.#startIndex = buf.length;
+    return [result, false];
   }
 }
