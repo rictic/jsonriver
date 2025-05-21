@@ -41,7 +41,6 @@
     "eslint": "^8.48.0",
     "np": "^10.0.7",
     "prettier": "^3.3.3",
-    "stream-json": "^1.8.0",
     "tachometer": "^0.7.1",
     "typescript": "^5.6.3",
     "wireit": "^0.14.9"
@@ -84,13 +83,9 @@
       "command": "tachometer bench/jsonriver.html bench/jsonriver-1.0.html bench/jsonparse.html "
     },
     "node-bench": {
-      "#comment": "Compare jsonriver vs stream-json in Node.js",
+      "#comment": "Compare jsonriver vs JSON.parse in Node.js",
       "dependencies": [
         "build-bench-bundle"
-      ],
-      "files": [
-        "bench/node-bench.js",
-        "bench/stream-json.js"
       ],
       "command": "node bench/node-bench.js"
     },

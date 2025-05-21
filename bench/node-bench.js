@@ -4,11 +4,6 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
-// Building stream-json such that it runs in the browser is a pain,
-// it depends on a bunch of Node built-ins and the like, so just doing a
-// simple microbenchmark here.
-
-import {streamJsonParser} from './stream-json.js';
 import {parse} from './bundles/bundle.min.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -82,10 +77,6 @@ const comparisons = [
   },
   oldJsonRiver,
   {
-    name: 'stream-json',
-    parse: streamJsonParser,
-  },
-  {
     name: 'JSON.parse',
     parse: JSON.parse,
   },
@@ -127,12 +118,12 @@ await benchmarkFile(
   comparisons,
   smallJsonString,
   'a small file (64KiB)',
-  1_000,
+  10_000,
 );
 await benchmarkFile(
   comparisons,
   mediumJsonString,
   'a medium file (1.4MiB)',
-  100,
+  1_000,
 );
-await benchmarkFile(comparisons, largeJsonString, 'a large file (25MiB)', 3);
+await benchmarkFile(comparisons, largeJsonString, 'a large file (25MiB)', 20);
