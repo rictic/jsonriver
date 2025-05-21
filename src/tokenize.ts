@@ -321,7 +321,7 @@ export class Tokenizer {
 
   #tokenizeAfterArrayValue() {
     this.input.skipPastWhitespace();
-    const nextChar = this.input.tryToTake(1);
+    const nextChar = this.input.tryToTakeChar();
     switch (nextChar) {
       case undefined: {
         return;
@@ -343,7 +343,7 @@ export class Tokenizer {
 
   #tokenizeObjectStart() {
     this.input.skipPastWhitespace();
-    const nextChar = this.input.tryToTake(1);
+    const nextChar = this.input.tryToTakeChar();
     switch (nextChar) {
       case undefined: {
         return;
@@ -368,7 +368,7 @@ export class Tokenizer {
 
   #tokenizeAfterObjectKey() {
     this.input.skipPastWhitespace();
-    const nextChar = this.input.tryToTake(1);
+    const nextChar = this.input.tryToTakeChar();
     switch (nextChar) {
       case undefined: {
         return;
@@ -387,7 +387,7 @@ export class Tokenizer {
 
   #tokenizeAfterObjectValue() {
     this.input.skipPastWhitespace();
-    const nextChar = this.input.tryToTake(1);
+    const nextChar = this.input.tryToTakeChar();
     switch (nextChar) {
       case undefined: {
         return;
@@ -410,7 +410,7 @@ export class Tokenizer {
 
   #tokenizeBeforeObjectKey() {
     this.input.skipPastWhitespace();
-    const nextChar = this.input.tryToTake(1);
+    const nextChar = this.input.tryToTakeChar();
     switch (nextChar) {
       case undefined: {
         return;
@@ -612,6 +612,20 @@ class Input {
     }
     const result = this.#buffer.slice(this.#startIndex, this.#startIndex + len);
     this.#startIndex += len;
+    return result;
+  }
+
+  /**
+   * Tries to take a single character from the buffer.
+   *
+   * If there are no characters in the buffer, returns undefined.
+   */
+  tryToTakeChar(): string | undefined {
+    if (this.length === 0) {
+      return undefined;
+    }
+    const result = this.#buffer[this.#startIndex];
+    this.#startIndex++;
     return result;
   }
 
