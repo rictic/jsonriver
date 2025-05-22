@@ -134,7 +134,47 @@ class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
     return this;
   }
 
-  handleToken(type: JsonTokenType, value: unknown): void {
+  handleNull(): void {
+    this.#handleToken(JsonTokenType.Null, undefined);
+  }
+
+  handleBoolean(value: boolean): void {
+    this.#handleToken(JsonTokenType.Boolean, value);
+  }
+
+  handleNumber(value: number): void {
+    this.#handleToken(JsonTokenType.Number, value);
+  }
+
+  handleStringStart(): void {
+    this.#handleToken(JsonTokenType.StringStart, undefined);
+  }
+
+  handleStringMiddle(value: string): void {
+    this.#handleToken(JsonTokenType.StringMiddle, value);
+  }
+
+  handleStringEnd(): void {
+    this.#handleToken(JsonTokenType.StringEnd, undefined);
+  }
+
+  handleArrayStart(): void {
+    this.#handleToken(JsonTokenType.ArrayStart, undefined);
+  }
+
+  handleArrayEnd(): void {
+    this.#handleToken(JsonTokenType.ArrayEnd, undefined);
+  }
+
+  handleObjectStart(): void {
+    this.#handleToken(JsonTokenType.ObjectStart, undefined);
+  }
+
+  handleObjectEnd(): void {
+    this.#handleToken(JsonTokenType.ObjectEnd, undefined);
+  }
+
+  #handleToken(type: JsonTokenType, value: unknown): void {
     const state = this.#stateStack[this.#stateStack.length - 1];
     if (state === undefined) {
       throw new Error('Unexpected trailing input');
