@@ -186,4 +186,16 @@ suite('parse', () => {
       );
     }
   });
+
+  test('all backslash escaped ascii characters', async (t) => {
+    for (let i = 0; i < 2 ** 8; i++) {
+      const char = String.fromCharCode(i);
+      const escapedCharJsonString = `"\\${char}"`;
+      await assertSameAsJsonParse(
+        `the input ${escapedCharJsonString}`,
+        escapedCharJsonString,
+        undefined,
+      );
+    }
+  });
 });
