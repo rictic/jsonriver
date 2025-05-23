@@ -49,36 +49,36 @@ function parseJsonNumber(str: string): number {
 
 export class Tokenizer {
   readonly input: Input;
-  readonly #handler: TokenHandler;
-  #stack = [State.ExpectingValue];
-  #emittedTokens = 0;
+  private readonly handler: TokenHandler;
+  private stack = [State.ExpectingValue];
+  private emittedTokens = 0;
 
   constructor(stream: AsyncIterable<string>, handler: TokenHandler) {
     this.input = new Input(stream);
-    this.#handler = handler;
+    this.handler = handler;
   }
 
   isDone(): boolean {
-    return this.#stack.length === 0 && this.input.length === 0;
+    return this.stack.length === 0 && this.input.length === 0;
   }
 
   async pump(): Promise<void> {
-    const start = this.#emittedTokens;
+    const start = this.emittedTokens;
     while (true) {
-      const before = this.#emittedTokens;
-      this.#tokenizeMore();
-      if (this.#emittedTokens > before) {
+      const before = this.emittedTokens;
+      this.tokenizeMore();
+      if (this.emittedTokens > before) {
         // Keep processing buffered tokens until we've exhausted them so that
         // tokenization and parsing happen in larger batches.
         continue;
       }
-      if (this.#emittedTokens > start) {
+      if (this.emittedTokens > start) {
         // We emitted at least one token and can't make more progress without
         // additional input.
         this.input.commit();
         return;
       }
-      if (this.#stack.length === 0) {
+      if (this.stack.length === 0) {
         await this.input.expectEndOfContent();
         this.input.commit();
         return;
@@ -93,32 +93,32 @@ export class Tokenizer {
   }
 
 
-  #tokenizeMore() {
-    const state = this.#stack[this.#stack.length - 1];
+  private tokenizeMore() {
+    const state = this.stack[this.stack.length - 1];
     switch (state) {
       case State.ExpectingValue:
-        this.#tokenizeValue();
+        this.tokenizeValue();
         break;
       case State.InString:
-        this.#tokenizeString();
+        this.tokenizeString();
         break;
       case State.StartArray:
-        this.#tokenizeArrayStart();
+        this.tokenizeArrayStart();
         break;
       case State.AfterArrayValue:
-        this.#tokenizeAfterArrayValue();
+        this.tokenizeAfterArrayValue();
         break;
       case State.StartObject:
-        this.#tokenizeObjectStart();
+        this.tokenizeObjectStart();
         break;
       case State.AfterObjectKey:
-        this.#tokenizeAfterObjectKey();
+        this.tokenizeAfterObjectKey();
         break;
       case State.AfterObjectValue:
-        this.#tokenizeAfterObjectValue();
+        this.tokenizeAfterObjectValue();
         break;
       case State.BeforeObjectKey:
-        this.#tokenizeBeforeObjectKey();
+        this.tokenizeBeforeObjectKey();
         break;
       case undefined:
         return;
@@ -129,24 +129,24 @@ export class Tokenizer {
     }
   }
 
-  #tokenizeValue() {
+  private tokenizeValue() {
     this.input.skipPastWhitespace();
     if (this.input.tryToTakePrefix('null')) {
-      this.#handler.handleNull();
-      this.#emittedTokens++;
-      this.#stack.pop();
+      this.handler.handleNull();
+      this.emittedTokens++;
+      this.stack.pop();
       return;
     }
     if (this.input.tryToTakePrefix('true')) {
-      this.#handler.handleBoolean(true);
-      this.#emittedTokens++;
-      this.#stack.pop();
+      this.handler.handleBoolean(true);
+      this.emittedTokens++;
+      this.stack.pop();
       return;
     }
     if (this.input.tryToTakePrefix('false')) {
-      this.#handler.handleBoolean(false);
-      this.#emittedTokens++;
-      this.#stack.pop();
+      this.handler.handleBoolean(false);
+      this.emittedTokens++;
+      this.stack.pop();
       return;
     }
     if (this.input.length > 0) {
@@ -183,43 +183,43 @@ export class Tokenizer {
         const numberChars = this.input.slice(0, i);
         this.input.advance(i);
         const number = parseJsonNumber(numberChars);
-        this.#handler.handleNumber(number);
-        this.#emittedTokens++;
-        this.#stack.pop();
+        this.handler.handleNumber(number);
+        this.emittedTokens++;
+        this.stack.pop();
         this.input.moreContentExpected = true;
         return;
       }
     }
     if (this.input.tryToTakePrefix('"')) {
-      this.#stack.pop();
-      this.#stack.push(State.InString);
-      this.#handler.handleStringStart();
-      this.#emittedTokens++;
-      this.#tokenizeString();
+      this.stack.pop();
+      this.stack.push(State.InString);
+      this.handler.handleStringStart();
+      this.emittedTokens++;
+      this.tokenizeString();
       return;
     }
     if (this.input.tryToTakePrefix('[')) {
-      this.#stack.pop();
-      this.#stack.push(State.StartArray);
-      this.#handler.handleArrayStart();
-      this.#emittedTokens++;
-      return this.#tokenizeArrayStart();
+      this.stack.pop();
+      this.stack.push(State.StartArray);
+      this.handler.handleArrayStart();
+      this.emittedTokens++;
+      return this.tokenizeArrayStart();
     }
     if (this.input.tryToTakePrefix('{')) {
-      this.#stack.pop();
-      this.#stack.push(State.StartObject);
-      this.#handler.handleObjectStart();
-      this.#emittedTokens++;
-      return this.#tokenizeObjectStart();
+      this.stack.pop();
+      this.stack.push(State.StartObject);
+      this.handler.handleObjectStart();
+      this.emittedTokens++;
+      return this.tokenizeObjectStart();
     }
   }
 
-  #tokenizeString() {
+  private tokenizeString() {
     while (true) {
       const [chunk, interrupted] = this.input.takeUntilQuoteOrBackslash();
       if (chunk.length > 0) {
-        this.#handler.handleStringMiddle(chunk);
-        this.#emittedTokens++;
+        this.handler.handleStringMiddle(chunk);
+        this.emittedTokens++;
       } else if (!interrupted) {
         // We've parsed everything we can in the buffer.
         return;
@@ -232,9 +232,9 @@ export class Tokenizer {
         const nextChar = this.input.peek(0);
         if (nextChar === '"') {
           this.input.advance(1);
-          this.#handler.handleStringEnd();
-          this.#emittedTokens++;
-          this.#stack.pop();
+          this.handler.handleStringEnd();
+          this.emittedTokens++;
+          this.stack.pop();
           return;
         }
         // string escapes
@@ -265,8 +265,8 @@ export class Tokenizer {
             code = (code << 4) | digit;
           }
           this.input.advance(6);
-          this.#handler.handleStringMiddle(String.fromCharCode(code));
-          this.#emittedTokens++;
+          this.handler.handleStringMiddle(String.fromCharCode(code));
+          this.emittedTokens++;
           continue;
         } else {
           this.input.advance(2);
@@ -300,31 +300,31 @@ export class Tokenizer {
           default:
             throw new Error('Bad escape in string');
         }
-        this.#handler.handleStringMiddle(value);
-        this.#emittedTokens++;
+        this.handler.handleStringMiddle(value);
+        this.emittedTokens++;
       }
     }
   }
 
-  #tokenizeArrayStart() {
+  private tokenizeArrayStart() {
     this.input.skipPastWhitespace();
     if (this.input.length === 0) {
       return;
     }
     if (this.input.tryToTakePrefix(']')) {
-      this.#handler.handleArrayEnd();
-      this.#emittedTokens++;
-      this.#stack.pop();
+      this.handler.handleArrayEnd();
+      this.emittedTokens++;
+      this.stack.pop();
       return;
     } else {
-      this.#stack.pop();
-      this.#stack.push(State.AfterArrayValue);
-      this.#stack.push(State.ExpectingValue);
-      this.#tokenizeValue();
+      this.stack.pop();
+      this.stack.push(State.AfterArrayValue);
+      this.stack.push(State.ExpectingValue);
+      this.tokenizeValue();
     }
   }
 
-  #tokenizeAfterArrayValue() {
+  private tokenizeAfterArrayValue() {
     this.input.skipPastWhitespace();
     const nextChar = this.input.tryToTakeCharCode();
     switch (nextChar) {
@@ -333,15 +333,15 @@ export class Tokenizer {
       }
       case 0x5d: {
         // ']'
-        this.#handler.handleArrayEnd();
-        this.#emittedTokens++;
-        this.#stack.pop();
+        this.handler.handleArrayEnd();
+        this.emittedTokens++;
+        this.stack.pop();
         return;
       }
       case 0x2c: {
         // ','
-        this.#stack.push(State.ExpectingValue);
-        return this.#tokenizeValue();
+        this.stack.push(State.ExpectingValue);
+        return this.tokenizeValue();
       }
       default: {
         throw new Error(
@@ -352,7 +352,7 @@ export class Tokenizer {
     }
   }
 
-  #tokenizeObjectStart() {
+  private tokenizeObjectStart() {
     this.input.skipPastWhitespace();
     const nextChar = this.input.tryToTakeCharCode();
     switch (nextChar) {
@@ -361,19 +361,19 @@ export class Tokenizer {
       }
       case 0x7d: {
         // '}'
-        this.#handler.handleObjectEnd();
-        this.#emittedTokens++;
-        this.#stack.pop();
+        this.handler.handleObjectEnd();
+        this.emittedTokens++;
+        this.stack.pop();
         return;
       }
       case 0x22: {
         // '"'
-        this.#stack.pop();
-        this.#stack.push(State.AfterObjectKey);
-        this.#stack.push(State.InString);
-        this.#handler.handleStringStart();
-        this.#emittedTokens++;
-        return this.#tokenizeString();
+        this.stack.pop();
+        this.stack.push(State.AfterObjectKey);
+        this.stack.push(State.InString);
+        this.handler.handleStringStart();
+        this.emittedTokens++;
+        return this.tokenizeString();
       }
       default: {
         throw new Error(
@@ -384,7 +384,7 @@ export class Tokenizer {
     }
   }
 
-  #tokenizeAfterObjectKey() {
+  private tokenizeAfterObjectKey() {
     this.input.skipPastWhitespace();
     const nextChar = this.input.tryToTakeCharCode();
     switch (nextChar) {
@@ -393,10 +393,10 @@ export class Tokenizer {
       }
       case 0x3a: {
         // ':'
-        this.#stack.pop();
-        this.#stack.push(State.AfterObjectValue);
-        this.#stack.push(State.ExpectingValue);
-        return this.#tokenizeValue();
+        this.stack.pop();
+        this.stack.push(State.AfterObjectValue);
+        this.stack.push(State.ExpectingValue);
+        return this.tokenizeValue();
       }
       default: {
         throw new Error(
@@ -407,7 +407,7 @@ export class Tokenizer {
     }
   }
 
-  #tokenizeAfterObjectValue() {
+  private tokenizeAfterObjectValue() {
     this.input.skipPastWhitespace();
     const nextChar = this.input.tryToTakeCharCode();
     switch (nextChar) {
@@ -416,16 +416,16 @@ export class Tokenizer {
       }
       case 0x7d: {
         // '}'
-        this.#handler.handleObjectEnd();
-        this.#emittedTokens++;
-        this.#stack.pop();
+        this.handler.handleObjectEnd();
+        this.emittedTokens++;
+        this.stack.pop();
         return;
       }
       case 0x2c: {
         // ','
-        this.#stack.pop();
-        this.#stack.push(State.BeforeObjectKey);
-        return this.#tokenizeBeforeObjectKey();
+        this.stack.pop();
+        this.stack.push(State.BeforeObjectKey);
+        return this.tokenizeBeforeObjectKey();
       }
       default: {
         throw new Error(
@@ -436,7 +436,7 @@ export class Tokenizer {
     }
   }
 
-  #tokenizeBeforeObjectKey() {
+  private tokenizeBeforeObjectKey() {
     this.input.skipPastWhitespace();
     const nextChar = this.input.tryToTakeCharCode();
     switch (nextChar) {
@@ -445,12 +445,12 @@ export class Tokenizer {
       }
       case 0x22: {
         // '"'
-        this.#stack.pop();
-        this.#stack.push(State.AfterObjectKey);
-        this.#stack.push(State.InString);
-        this.#handler.handleStringStart();
-        this.#emittedTokens++;
-        return this.#tokenizeString();
+        this.stack.pop();
+        this.stack.push(State.AfterObjectKey);
+        this.stack.push(State.InString);
+        this.handler.handleStringStart();
+        this.emittedTokens++;
+        return this.tokenizeString();
       }
       default: {
         throw new Error(
@@ -529,45 +529,45 @@ export interface NumberToken {
  * Now that we're doing all the work synchronously, it's a bit overkill.
  */
 class Input {
-  #buffer = '';
-  #startIndex = 0;
+  private buffer = '';
+  private startIndex = 0;
   // True if no more content will be added to the buffer.
   bufferComplete = false;
   moreContentExpected = true;
-  #stream: AsyncIterator<string>;
+  private stream: AsyncIterator<string>;
   constructor(stream: AsyncIterable<string>) {
-    this.#stream = stream[Symbol.asyncIterator]();
+    this.stream = stream[Symbol.asyncIterator]();
   }
 
   get length(): number {
-    return this.#buffer.length - this.#startIndex;
+    return this.buffer.length - this.startIndex;
   }
 
   advance(len: number) {
-    this.#startIndex += len;
+    this.startIndex += len;
   }
 
   peek(offset: number): string | undefined {
-    return this.#buffer[this.#startIndex + offset];
+    return this.buffer[this.startIndex + offset];
   }
 
   peekCharCode(offset: number): number {
-    return this.#buffer.charCodeAt(this.#startIndex + offset);
+    return this.buffer.charCodeAt(this.startIndex + offset);
   }
 
   slice(start: number, end: number): string {
-    return this.#buffer.slice(this.#startIndex + start, this.#startIndex + end);
+    return this.buffer.slice(this.startIndex + start, this.startIndex + end);
   }
 
   commit() {
-    if (this.#startIndex > 0) {
-      this.#buffer = this.#buffer.slice(this.#startIndex);
-      this.#startIndex = 0;
+    if (this.startIndex > 0) {
+      this.buffer = this.buffer.slice(this.startIndex);
+      this.startIndex = 0;
     }
   }
 
   remaining(): string {
-    return this.#buffer.slice(this.#startIndex);
+    return this.buffer.slice(this.startIndex);
   }
 
   /**
@@ -578,10 +578,10 @@ class Input {
     this.moreContentExpected = false;
     const check = () => {
       this.commit();
-      this.#buffer = this.#buffer.trim();
-      if (this.#buffer.length !== 0) {
+      this.buffer = this.buffer.trim();
+      if (this.buffer.length !== 0) {
         throw new Error(
-          `Unexpected trailing content ${JSON.stringify(this.#buffer)}`,
+          `Unexpected trailing content ${JSON.stringify(this.buffer)}`,
         );
       }
     };
@@ -598,7 +598,7 @@ class Input {
    * Returns false if the stream is exhausted.
    */
   async tryToExpandBuffer() {
-    const result = await this.#stream.next();
+    const result = await this.stream.next();
     if (result.done) {
       this.bufferComplete = true;
       if (this.moreContentExpected) {
@@ -606,29 +606,29 @@ class Input {
       }
       return false;
     }
-    this.#buffer += result.value;
+    this.buffer += result.value;
     return true;
   }
 
   skipPastWhitespace() {
-    let i = this.#startIndex;
-    while (i < this.#buffer.length) {
-      const c = this.#buffer.charCodeAt(i);
+    let i = this.startIndex;
+    while (i < this.buffer.length) {
+      const c = this.buffer.charCodeAt(i);
       if (c === 32 || c === 9 || c === 10 || c === 13) {
         i++;
       } else {
         break;
       }
     }
-    this.#startIndex = i;
+    this.startIndex = i;
   }
 
   /**
    * If the buffer starts with `prefix`, consumes it and returns true.
    */
   tryToTakePrefix(prefix: string): boolean {
-    if (this.#buffer.startsWith(prefix, this.#startIndex)) {
-      this.#startIndex += prefix.length;
+    if (this.buffer.startsWith(prefix, this.startIndex)) {
+      this.startIndex += prefix.length;
       return true;
     }
     return false;
@@ -643,8 +643,8 @@ class Input {
     if (this.length < len) {
       return undefined;
     }
-    const result = this.#buffer.slice(this.#startIndex, this.#startIndex + len);
-    this.#startIndex += len;
+    const result = this.buffer.slice(this.startIndex, this.startIndex + len);
+    this.startIndex += len;
     return result;
   }
 
@@ -657,8 +657,8 @@ class Input {
     if (this.length === 0) {
       return undefined;
     }
-    const code = this.#buffer.charCodeAt(this.#startIndex);
-    this.#startIndex++;
+    const code = this.buffer.charCodeAt(this.startIndex);
+    this.startIndex++;
     return code;
   }
 
@@ -671,22 +671,22 @@ class Input {
    * the pattern was found.
    */
   takeUntilQuoteOrBackslash(): [string, boolean] {
-    const buf = this.#buffer;
-    let i = this.#startIndex;
+    const buf = this.buffer;
+    let i = this.startIndex;
     while (i < buf.length) {
       const c = buf.charCodeAt(i);
       if (c <= 0x1f) {
         throw new Error('Unescaped control character in string');
       }
       if (c === 34 || c === 92) {
-        const result = buf.slice(this.#startIndex, i);
-        this.#startIndex = i;
+        const result = buf.slice(this.startIndex, i);
+        this.startIndex = i;
         return [result, true];
       }
       i++;
     }
-    const result = buf.slice(this.#startIndex);
-    this.#startIndex = buf.length;
+    const result = buf.slice(this.startIndex);
+    this.startIndex = buf.length;
     return [result, false];
   }
 }
