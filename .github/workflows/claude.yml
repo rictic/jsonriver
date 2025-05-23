@@ -1,0 +1,60 @@
+name: Claude Code
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  issues:
+    types: [opened, assigned]
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  claude:
+    if: |
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
+      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code
+        id: claude
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: '${{ github.event.comment.body }}'
+
+          # Define which tools Claude can use
+          allowed_tools: |
+            Bash(git status),
+            Bash(git log),
+            Bash(git show),
+            Bash(git blame),
+            Bash(git reflog),
+            Bash(git stash list),
+            Bash(git ls-files),
+            Bash(git branch),
+            Bash(git tag),
+            Bash(git diff),
+            Bash(npm ci),
+            Bash(npm install),
+            Bash(npm test),
+            Bash(npm run lint),
+            Bash(npm run format),
+            Bash(npm run node-bench),
+            View,
+            GlobTool,
+            GrepTool,
+            BatchTool
