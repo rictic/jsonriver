@@ -28,11 +28,36 @@ async function* tokenize(stream: AsyncIterable<string>): AsyncIterable<
       type: JsonTokenType;
       value: string | number | boolean | undefined;
     }> = [];
-    handleToken(
-      type: JsonTokenType,
-      value: string | number | boolean | undefined,
-    ): void {
-      this.tokens.push({type, value});
+
+    handleNull(): void {
+      this.tokens.push({type: JsonTokenType.Null, value: undefined});
+    }
+    handleBoolean(value: boolean): void {
+      this.tokens.push({type: JsonTokenType.Boolean, value});
+    }
+    handleNumber(value: number): void {
+      this.tokens.push({type: JsonTokenType.Number, value});
+    }
+    handleStringStart(): void {
+      this.tokens.push({type: JsonTokenType.StringStart, value: undefined});
+    }
+    handleStringMiddle(value: string): void {
+      this.tokens.push({type: JsonTokenType.StringMiddle, value});
+    }
+    handleStringEnd(): void {
+      this.tokens.push({type: JsonTokenType.StringEnd, value: undefined});
+    }
+    handleArrayStart(): void {
+      this.tokens.push({type: JsonTokenType.ArrayStart, value: undefined});
+    }
+    handleArrayEnd(): void {
+      this.tokens.push({type: JsonTokenType.ArrayEnd, value: undefined});
+    }
+    handleObjectStart(): void {
+      this.tokens.push({type: JsonTokenType.ObjectStart, value: undefined});
+    }
+    handleObjectEnd(): void {
+      this.tokens.push({type: JsonTokenType.ObjectEnd, value: undefined});
     }
   }
   const handler = new Handler();

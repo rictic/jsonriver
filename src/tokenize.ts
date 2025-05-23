@@ -5,10 +5,16 @@
  */
 
 export interface TokenHandler {
-  handleToken(type: JsonTokenType.Boolean, value: boolean): void;
-  handleToken(type: JsonTokenType.Number, value: number): void;
-  handleToken(type: JsonTokenType.StringMiddle, value: string): void;
-  handleToken(type: JsonTokenType, value: undefined): void;
+  handleNull(): void;
+  handleBoolean(value: boolean): void;
+  handleNumber(value: number): void;
+  handleStringStart(): void;
+  handleStringMiddle(value: string): void;
+  handleStringEnd(): void;
+  handleArrayStart(): void;
+  handleArrayEnd(): void;
+  handleObjectStart(): void;
+  handleObjectEnd(): void;
 }
 
 /**
@@ -86,16 +92,6 @@ export class Tokenizer {
     }
   }
 
-  #emit(type: JsonTokenType.Boolean, value: boolean): void;
-  #emit(type: JsonTokenType.Number, value: number): void;
-  #emit(type: JsonTokenType.StringMiddle, value: string): void;
-  #emit(type: JsonTokenType, value: undefined): void;
-  #emit(type: JsonTokenType, value: unknown) {
-    this.#emittedTokens++;
-    // An invalid cast, but the invariants between this method and that one
-    // are the same.
-    this.#handler.handleToken(type, value as undefined);
-  }
 
   #tokenizeMore() {
     const state = this.#stack[this.#stack.length - 1];
@@ -136,17 +132,20 @@ export class Tokenizer {
   #tokenizeValue() {
     this.input.skipPastWhitespace();
     if (this.input.tryToTakePrefix('null')) {
-      this.#emit(JsonTokenType.Null, undefined);
+      this.#handler.handleNull();
+      this.#emittedTokens++;
       this.#stack.pop();
       return;
     }
     if (this.input.tryToTakePrefix('true')) {
-      this.#emit(JsonTokenType.Boolean, true);
+      this.#handler.handleBoolean(true);
+      this.#emittedTokens++;
       this.#stack.pop();
       return;
     }
     if (this.input.tryToTakePrefix('false')) {
-      this.#emit(JsonTokenType.Boolean, false);
+      this.#handler.handleBoolean(false);
+      this.#emittedTokens++;
       this.#stack.pop();
       return;
     }
@@ -184,7 +183,8 @@ export class Tokenizer {
         const numberChars = this.input.slice(0, i);
         this.input.advance(i);
         const number = parseJsonNumber(numberChars);
-        this.#emit(JsonTokenType.Number, number);
+        this.#handler.handleNumber(number);
+        this.#emittedTokens++;
         this.#stack.pop();
         this.input.moreContentExpected = true;
         return;
@@ -193,20 +193,23 @@ export class Tokenizer {
     if (this.input.tryToTakePrefix('"')) {
       this.#stack.pop();
       this.#stack.push(State.InString);
-      this.#emit(JsonTokenType.StringStart, undefined);
+      this.#handler.handleStringStart();
+      this.#emittedTokens++;
       this.#tokenizeString();
       return;
     }
     if (this.input.tryToTakePrefix('[')) {
       this.#stack.pop();
       this.#stack.push(State.StartArray);
-      this.#emit(JsonTokenType.ArrayStart, undefined);
+      this.#handler.handleArrayStart();
+      this.#emittedTokens++;
       return this.#tokenizeArrayStart();
     }
     if (this.input.tryToTakePrefix('{')) {
       this.#stack.pop();
       this.#stack.push(State.StartObject);
-      this.#emit(JsonTokenType.ObjectStart, undefined);
+      this.#handler.handleObjectStart();
+      this.#emittedTokens++;
       return this.#tokenizeObjectStart();
     }
   }
@@ -215,7 +218,8 @@ export class Tokenizer {
     while (true) {
       const [chunk, interrupted] = this.input.takeUntilQuoteOrBackslash();
       if (chunk.length > 0) {
-        this.#emit(JsonTokenType.StringMiddle, chunk);
+        this.#handler.handleStringMiddle(chunk);
+        this.#emittedTokens++;
       } else if (!interrupted) {
         // We've parsed everything we can in the buffer.
         return;
@@ -228,7 +232,8 @@ export class Tokenizer {
         const nextChar = this.input.peek(0);
         if (nextChar === '"') {
           this.input.advance(1);
-          this.#emit(JsonTokenType.StringEnd, undefined);
+          this.#handler.handleStringEnd();
+          this.#emittedTokens++;
           this.#stack.pop();
           return;
         }
@@ -260,7 +265,8 @@ export class Tokenizer {
             code = (code << 4) | digit;
           }
           this.input.advance(6);
-          this.#emit(JsonTokenType.StringMiddle, String.fromCharCode(code));
+          this.#handler.handleStringMiddle(String.fromCharCode(code));
+          this.#emittedTokens++;
           continue;
         } else {
           this.input.advance(2);
@@ -294,7 +300,8 @@ export class Tokenizer {
           default:
             throw new Error('Bad escape in string');
         }
-        this.#emit(JsonTokenType.StringMiddle, value);
+        this.#handler.handleStringMiddle(value);
+        this.#emittedTokens++;
       }
     }
   }
@@ -305,7 +312,8 @@ export class Tokenizer {
       return;
     }
     if (this.input.tryToTakePrefix(']')) {
-      this.#emit(JsonTokenType.ArrayEnd, undefined);
+      this.#handler.handleArrayEnd();
+      this.#emittedTokens++;
       this.#stack.pop();
       return;
     } else {
@@ -325,7 +333,8 @@ export class Tokenizer {
       }
       case 0x5d: {
         // ']'
-        this.#emit(JsonTokenType.ArrayEnd, undefined);
+        this.#handler.handleArrayEnd();
+        this.#emittedTokens++;
         this.#stack.pop();
         return;
       }
@@ -352,7 +361,8 @@ export class Tokenizer {
       }
       case 0x7d: {
         // '}'
-        this.#emit(JsonTokenType.ObjectEnd, undefined);
+        this.#handler.handleObjectEnd();
+        this.#emittedTokens++;
         this.#stack.pop();
         return;
       }
@@ -361,7 +371,8 @@ export class Tokenizer {
         this.#stack.pop();
         this.#stack.push(State.AfterObjectKey);
         this.#stack.push(State.InString);
-        this.#emit(JsonTokenType.StringStart, undefined);
+        this.#handler.handleStringStart();
+        this.#emittedTokens++;
         return this.#tokenizeString();
       }
       default: {
@@ -405,7 +416,8 @@ export class Tokenizer {
       }
       case 0x7d: {
         // '}'
-        this.#emit(JsonTokenType.ObjectEnd, undefined);
+        this.#handler.handleObjectEnd();
+        this.#emittedTokens++;
         this.#stack.pop();
         return;
       }
@@ -436,7 +448,8 @@ export class Tokenizer {
         this.#stack.pop();
         this.#stack.push(State.AfterObjectKey);
         this.#stack.push(State.InString);
-        this.#emit(JsonTokenType.StringStart, undefined);
+        this.#handler.handleStringStart();
+        this.#emittedTokens++;
         return this.#tokenizeString();
       }
       default: {
