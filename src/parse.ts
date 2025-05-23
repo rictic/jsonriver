@@ -161,10 +161,11 @@ class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
           undefined,
         );
         break;
-      case StateEnum.InArray:
+      case StateEnum.InArray: {
         const v = this.progressValue(JsonTokenType.StringStart, undefined);
         state.value.push(v);
         break;
+      }
       case StateEnum.InObjectExpectingKey:
         this.stateStack.push({type: StateEnum.InString, value: ''});
         break;
