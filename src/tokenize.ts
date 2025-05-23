@@ -92,7 +92,6 @@ export class Tokenizer {
     }
   }
 
-
   private tokenizeMore() {
     const state = this.stack[this.stack.length - 1];
     switch (state) {

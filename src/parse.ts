@@ -97,7 +97,9 @@ interface InObjectExpectingValueState {
   value: [key: string, object: JsonObject];
 }
 class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
-  private readonly stateStack: State[] = [{type: StateEnum.Initial, value: undefined}];
+  private readonly stateStack: State[] = [
+    {type: StateEnum.Initial, value: undefined},
+  ];
   private toplevelValue: JsonValue | undefined;
   readonly tokenizer: Tokenizer;
   private finished = false;
@@ -292,7 +294,10 @@ class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
     }
   }
 
-  private updateStringParent(updated: string, parentState: State | undefined): void {
+  private updateStringParent(
+    updated: string,
+    parentState: State | undefined,
+  ): void {
     switch (parentState?.type) {
       case undefined:
         this.toplevelValue = updated;
