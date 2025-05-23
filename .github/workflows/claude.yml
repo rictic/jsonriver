@@ -34,4 +34,27 @@ jobs:
         uses: anthropics/claude-code-action@beta
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: "${{ github.event.comment.body }}"
 
+          # Define which tools Claude can use
+          allowed_tools: |
+            Bash(git status),
+            Bash(git log),
+            Bash(git show),
+            Bash(git blame),
+            Bash(git reflog),
+            Bash(git stash list),
+            Bash(git ls-files),
+            Bash(git branch),
+            Bash(git tag),
+            Bash(git diff),
+            Bash(npm ci),
+            Bash(npm install),
+            Bash(npm test),
+            Bash(npm run lint),
+            Bash(npm run format),
+            Bash(npm run node-bench),
+            View,
+            GlobTool,
+            GrepTool,
+            BatchTool
