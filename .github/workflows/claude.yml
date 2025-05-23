@@ -34,7 +34,7 @@ jobs:
         uses: anthropics/claude-code-action@beta
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          prompt: "${{ github.event.comment.body }}"
+          prompt: '${{ github.event.comment.body }}'
 
           # Define which tools Claude can use
           allowed_tools: |
