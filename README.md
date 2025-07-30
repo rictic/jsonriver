@@ -61,9 +61,9 @@ The final value yielded by `parse` will be the same as if you had called `JSON.p
 
 ## See also
 
-The built-in JSON.parse is faster (~10x in simple benchmarking) if you don't need streaming.
+The built-in JSON.parse is faster (~5x in simple benchmarking) if you don't need streaming.
 
-[stream-json](https://www.npmjs.com/package/stream-json), is larger, more complex, and slower (~5-10x slower in simple benchmarking), but it's much more featureful, and if you only need a subset of the data it can likely be much faster.
+[stream-json](https://www.npmjs.com/package/stream-json), is larger, more complex, and slower (~10-20x slower in simple benchmarking), but it's much more featureful, and if you only need a subset of the data it can likely be much faster.
 
 ## Development
 
