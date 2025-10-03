@@ -200,15 +200,16 @@ suite('parse', () => {
     }
 
     const stream = makeStreamOfChunks(deepArray, 100);
-    let result: any;
+    type Val = number | [Val];
+    let result: Val | undefined;
     for await (const val of parse(stream)) {
-      result = val;
+      result = val as Val;
     }
     assert.ok(result, 'Should parse deeply nested array');
 
     // Verify depth by walking down
-    type Val = number | [Val];
-    let current: Val = result;
+
+    let current = result;
     for (let i = 0; i < depth; i++) {
       if (!Array.isArray(current)) {
         assert.equal(current, 1, `At depth ${i}, should reach value 1`);
