@@ -5,7 +5,9 @@
  */
 
 import * as assert from 'node:assert/strict';
-import {test, suite} from 'node:test';
+import {readFileSync} from 'node:fs';
+import {join} from 'node:path';
+import {suite, test} from 'node:test';
 import {parse} from '../index.js';
 import {
   assertRoundTrips,
@@ -13,8 +15,6 @@ import {
   makeStreamOfChunks,
   toArray,
 } from './utils.js';
-import {readFileSync} from 'node:fs';
-import {join} from 'node:path';
 
 async function* mapStructuralClone<T>(
   iter: AsyncIterable<T>,
@@ -185,5 +185,38 @@ suite('parse', () => {
         `Parsing ${JSON.stringify(val)}`,
       );
     }
+  });
+
+  test('deep nesting', async () => {
+    // Test that we can parse deeply nested structures (> 100 levels)
+    let deepArray = '';
+    const depth = 1_000_000;
+    for (let i = 0; i < depth; i++) {
+      deepArray += '[';
+    }
+    deepArray += '1';
+    for (let i = 0; i < depth; i++) {
+      deepArray += ']';
+    }
+
+    const stream = makeStreamOfChunks(deepArray, 100);
+    type Val = number | [Val];
+    let result: Val | undefined;
+    for await (const val of parse(stream)) {
+      result = val as Val;
+    }
+    assert.ok(result, 'Should parse deeply nested array');
+
+    // Verify depth by walking down
+
+    let current = result;
+    for (let i = 0; i < depth; i++) {
+      if (!Array.isArray(current)) {
+        assert.equal(current, 1, `At depth ${i}, should reach value 1`);
+        break;
+      }
+      current = current[0];
+    }
+    assert.equal(current, 1, 'At max depth, should reach value 1');
   });
 });
