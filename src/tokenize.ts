@@ -242,36 +242,34 @@ export class Tokenizer {
           // Can't continue without more input.
           return;
         }
-        if (nextChar2 === 'u') {
-          // need 4 more characters
-          if (this.input.length < 6) {
-            return;
-          }
-          let code = 0;
-          for (let j = 2; j < 6; j++) {
-            const c = this.input.peekCharCode(j);
-            const digit =
-              c >= 48 && c <= 57
-                ? c - 48
-                : c >= 65 && c <= 70
-                  ? c - 55
-                  : c >= 97 && c <= 102
-                    ? c - 87
-                    : -1;
-            if (digit === -1) {
-              throw new Error('Bad Unicode escape in JSON');
-            }
-            code = (code << 4) | digit;
-          }
-          this.input.advance(6);
-          this.handler.handleStringMiddle(String.fromCharCode(code));
-          this.emittedTokens++;
-          continue;
-        } else {
-          this.input.advance(2);
-        }
         let value;
         switch (nextChar2) {
+          case 'u': {
+            // need 4 more characters
+            if (this.input.length < 6) {
+              return;
+            }
+            let code = 0;
+            for (let j = 2; j < 6; j++) {
+              const c = this.input.peekCharCode(j);
+              const digit =
+                c >= 48 && c <= 57
+                  ? c - 48
+                  : c >= 65 && c <= 70
+                    ? c - 55
+                    : c >= 97 && c <= 102
+                      ? c - 87
+                      : -1;
+              if (digit === -1) {
+                throw new Error('Bad Unicode escape in JSON');
+              }
+              code = (code << 4) | digit;
+            }
+            this.input.advance(6);
+            this.handler.handleStringMiddle(String.fromCharCode(code));
+            this.emittedTokens++;
+            continue;
+          }
           case 'n':
             value = '\n';
             break;
@@ -299,6 +297,7 @@ export class Tokenizer {
           default:
             throw new Error('Bad escape in string');
         }
+        this.input.advance(2);
         this.handler.handleStringMiddle(value);
         this.emittedTokens++;
       }
