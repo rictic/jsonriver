@@ -44,6 +44,8 @@ If you gave this to jsonriver one byte at a time it would yield this sequence of
 
 The final value yielded by `parse` will be the same as if you had called `JSON.parse` on the entire string. This is tested against the JSONTestSuite, matching JSON.parse's behavior on tests of correct, incorrect, and ambiguous cases.
 
+The `parse` function also matches `JSON.parse`'s behavior for invalid input. If the input stream cannot be parsed as the start of a valid JSON document, then parsing halts and an error is thrown. More precisely, the promise returned by the `next` method on the AsyncIterable rejects with an Error. Likewise if the input stream closes prematurely.
+
 ## Invariants
 
 1.  Subsequent versions of a value will have the same type. i.e. we will never
