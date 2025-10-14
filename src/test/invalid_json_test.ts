@@ -37,6 +37,7 @@ world"`,
   ['multiple top-level values', '{"a":1}{"b":2}'],
   ['extra bracket', '[1,2]]'],
   ['trailing characters', '[true, false] garbage'],
+  ['number followed by NBSP', '1\u00A0'],
 ];
 
 suite('invalid JSON strings', () => {
