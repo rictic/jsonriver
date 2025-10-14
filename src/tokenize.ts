@@ -576,10 +576,10 @@ class Input {
     this.moreContentExpected = false;
     const check = () => {
       this.commit();
-      this.buffer = this.buffer.trim();
-      if (this.buffer.length !== 0) {
+      this.skipPastWhitespace();
+      if (this.length !== 0) {
         throw new Error(
-          `Unexpected trailing content ${JSON.stringify(this.buffer)}`,
+          `Unexpected trailing content ${JSON.stringify(this.remaining())}`,
         );
       }
     };
