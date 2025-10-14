@@ -38,6 +38,15 @@ world"`,
   ['extra bracket', '[1,2]]'],
   ['trailing characters', '[true, false] garbage'],
   ['number followed by NBSP', '1\u00A0'],
+  ['NBSP before value', '\u00A0true'],
+  ['NBSP in array before value', '[\u00A01]'],
+  ['NBSP in array after value', '[1\u00A0]'],
+  ['NBSP in array between values', '[1,\u00A02]'],
+  ['NBSP in object before key', '{\u00A0"a": 1}'],
+  ['NBSP in object after key', '{"a"\u00A0: 1}'],
+  ['NBSP in object before value', '{"a":\u00A01}'],
+  ['NBSP in object after value', '{"a": 1\u00A0}'],
+  ['NBSP in object between properties', '{"a": 1,\u00A0"b": 2}'],
 ];
 
 suite('invalid JSON strings', () => {
