@@ -50,8 +50,14 @@ import {
  */
 export async function* parse(
   stream: AsyncIterable<string>,
+  completeCallback?: (info: ValueComplete) => void,
 ): AsyncIterableIterator<JsonValue> {
-  yield* new Parser(stream);
+  yield* new Parser(stream, completeCallback);
+}
+
+interface ValueComplete {
+  value: JsonValue;
+  pathSegments: Array<string | number>;
 }
 
 export type JsonValue =
@@ -110,6 +116,46 @@ interface InObjectExpectingValueState {
   value: [key: string, object: JsonObject];
 }
 
+class CompleteValueInfo {
+  private readonly stateStack: readonly State[];
+  value: JsonValue;
+
+  constructor(stateStack: State[]) {
+    this.stateStack = stateStack;
+    this.value = null;
+  }
+
+  get pathSegments(): Array<string | number> {
+    const result = [];
+    for (let i = 0; i < this.stateStack.length; i++) {
+      const state = this.stateStack[i]!;
+      switch (state.type) {
+        case StateEnum.InString:
+        case StateEnum.Initial:
+          throw new Error(
+            `Impossible condition, in state ${JSON.stringify(state)} with current value ${JSON.stringify(this.value)}`,
+          );
+        case StateEnum.InObjectExpectingKey:
+          if (state.value[0] !== undefined) {
+            result.push(state.value[0]);
+          }
+          continue;
+        case StateEnum.InArray:
+          result.push(state.value.length - 1);
+          continue;
+        case StateEnum.InObjectExpectingValue:
+          result.push(state.value[0]);
+          continue;
+        default: {
+          const never: never = state;
+          throw new Error(`Unexpected state: ${String(never)}`);
+        }
+      }
+    }
+    return result;
+  }
+}
+
 class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
   private readonly stateStack: State[] = [
     {type: StateEnum.Initial, value: undefined},
@@ -118,8 +164,15 @@ class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
   readonly tokenizer: Tokenizer;
   private finished = false;
   private progressed = false;
+  private completeCallback: ((info: ValueComplete) => void) | undefined;
+  private readonly completeValueInfo: CompleteValueInfo;
 
-  constructor(textStream: AsyncIterable<string>) {
+  constructor(
+    textStream: AsyncIterable<string>,
+    completeCallback?: (info: ValueComplete) => void,
+  ) {
+    this.completeCallback = completeCallback;
+    this.completeValueInfo = new CompleteValueInfo(this.stateStack);
     this.tokenizer = tokenize(textStream, this);
   }
 
@@ -215,7 +268,7 @@ class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
     }
     state.value += value;
     const parentState = this.stateStack[this.stateStack.length - 2];
-    this.updateStringParent(state.value, parentState);
+    this.updateStringParent(state.value, parentState, false);
   }
 
   handleStringEnd(): void {
@@ -227,7 +280,7 @@ class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
     }
     this.stateStack.pop();
     const parentState = this.stateStack[this.stateStack.length - 1];
-    this.updateStringParent(state.value, parentState);
+    this.updateStringParent(state.value, parentState, true);
   }
 
   handleArrayStart(): void {
@@ -242,6 +295,10 @@ class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
       );
     }
     this.stateStack.pop();
+    if (this.completeCallback !== undefined) {
+      this.completeValueInfo.value = state.value;
+      this.completeCallback(this.completeValueInfo);
+    }
   }
 
   handleObjectStart(): void {
@@ -254,6 +311,10 @@ class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
       case StateEnum.InObjectExpectingKey:
       case StateEnum.InObjectExpectingValue:
         this.stateStack.pop();
+        if (this.completeCallback !== undefined) {
+          this.completeValueInfo.value = state.value[1];
+          this.completeCallback(this.completeValueInfo);
+        }
         break;
       default:
         throw new Error(
@@ -279,10 +340,24 @@ class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
       case StateEnum.Initial:
         this.stateStack.pop();
         this.toplevelValue = this.progressValue(type, value);
+        if (
+          this.completeCallback !== undefined &&
+          this.stateStack.length === 0
+        ) {
+          this.completeValueInfo.value = this.toplevelValue;
+          this.completeCallback(this.completeValueInfo);
+        }
         break;
       case StateEnum.InArray: {
         const v = this.progressValue(type, value);
         state.value.push(v);
+        if (
+          this.completeCallback !== undefined &&
+          this.stateStack[this.stateStack.length - 1] === state
+        ) {
+          this.completeValueInfo.value = v;
+          this.completeCallback(this.completeValueInfo);
+        }
         break;
       }
       case StateEnum.InObjectExpectingValue: {
@@ -298,6 +373,13 @@ class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
         }
         const v = this.progressValue(type, value);
         setObjectProperty(object, key, v);
+        if (
+          this.completeCallback !== undefined &&
+          this.stateStack[this.stateStack.length - 1] === expectedState
+        ) {
+          this.completeValueInfo.value = v;
+          this.completeCallback(this.completeValueInfo);
+        }
         break;
       }
       case StateEnum.InString:
@@ -314,17 +396,30 @@ class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
   private updateStringParent(
     updated: string,
     parentState: State | undefined,
+    isFinal: boolean,
   ): void {
     switch (parentState?.type) {
       case undefined:
         this.toplevelValue = updated;
+        if (isFinal && this.completeCallback !== undefined) {
+          this.completeValueInfo.value = updated;
+          this.completeCallback(this.completeValueInfo);
+        }
         break;
       case StateEnum.InArray:
         parentState.value[parentState.value.length - 1] = updated;
+        if (isFinal && this.completeCallback !== undefined) {
+          this.completeValueInfo.value = updated;
+          this.completeCallback(this.completeValueInfo);
+        }
         break;
       case StateEnum.InObjectExpectingValue: {
         const [key, object] = parentState.value;
         setObjectProperty(object, key, updated);
+        if (isFinal && this.completeCallback !== undefined) {
+          this.completeValueInfo.value = updated;
+          this.completeCallback(this.completeValueInfo);
+        }
         if (this.stateStack[this.stateStack.length - 1] === parentState) {
           this.stateStack.pop();
           this.stateStack.push({

@@ -121,6 +121,65 @@ suite('property based tests', () => {
     );
   });
 
+  function completeValues(
+    value: unknown,
+  ): Array<[unknown, Array<string | number>]> {
+    if (
+      typeof value === 'boolean' ||
+      typeof value === 'number' ||
+      typeof value === 'string' ||
+      value === null
+    ) {
+      return [[value, []]];
+    }
+    if (Array.isArray(value)) {
+      const result: Array<[unknown, Array<string | number>]> = [];
+      for (let i = 0; i < value.length; i++) {
+        const itemValues = completeValues(value[i]);
+        for (let j = 0; j < itemValues.length; j++) {
+          const [itemValue, itemPath] = itemValues[j]!;
+          result.push([itemValue, [i, ...itemPath]]);
+        }
+      }
+      result.push([value, []]);
+      return result;
+    }
+    if (typeof value !== 'object' || value === null) {
+      throw new Error(`Unexpected value type: ${typeof value}`);
+    }
+
+    const result: Array<[unknown, Array<string | number>]> = [];
+    for (const [key, val] of Object.entries(value)) {
+      const itemValues = completeValues(val);
+      for (let j = 0; j < itemValues.length; j++) {
+        const [itemValue, itemPath] = itemValues[j]!;
+        result.push([itemValue, [key, ...itemPath]]);
+      }
+    }
+    result.push([value, []]);
+    return result;
+  }
+
+  test('we are called for complete values as expected', async () => {
+    return fc.assert(
+      fc.asyncProperty(jsonValue, async (value: unknown) => {
+        const stringStream = makeStreamOfChunks(JSON.stringify(value), 1);
+        const actualCompleteValues: Array<[unknown, Array<string | number>]> =
+          [];
+        await toArray(
+          parse(stringStream, (info) => {
+            actualCompleteValues.push([info.value, [...info.pathSegments]]);
+          }),
+        );
+        assert.deepEqual(
+          actualCompleteValues,
+          completeValues(JSON.parse(JSON.stringify(value))),
+          `Complete values when parsing ${JSON.stringify(value)}}`,
+        );
+      }),
+    );
+  });
+
   test('strings only grow', async () => {
     // check the invariant
     function check(prev: unknown, curr: unknown) {
