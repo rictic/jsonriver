@@ -2,6 +2,7 @@
   "compilerOptions": {
     "target": "es2022",
     "module": "ES2020",
+    "moduleResolution": "node",
     "sourceMap": true,
     "rootDir": "./src",
     "outDir": "./dist",

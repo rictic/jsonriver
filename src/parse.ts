@@ -63,6 +63,19 @@ export type JsonValue =
   | JsonObject;
 export type JsonObject = {[key: string]: JsonValue};
 
+function setObjectProperty(object: JsonObject, key: string, value: JsonValue) {
+  if (key === '__proto__') {
+    Object.defineProperty(object, key, {
+      value,
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
+  } else {
+    object[key] = value;
+  }
+}
+
 const enum StateEnum {
   Initial,
   InString,
@@ -90,12 +103,13 @@ interface InArrayState {
 }
 interface InObjectExpectingKeyState {
   type: StateEnum.InObjectExpectingKey;
-  value: JsonObject;
+  value: [prevKey: string | undefined, object: JsonObject];
 }
 interface InObjectExpectingValueState {
   type: StateEnum.InObjectExpectingValue;
   value: [key: string, object: JsonObject];
 }
+
 class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
   private readonly stateStack: State[] = [
     {type: StateEnum.Initial, value: undefined},
@@ -172,7 +186,7 @@ class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
       case StateEnum.InObjectExpectingValue: {
         const [key, object] = state.value;
         const sv = this.progressValue(JsonTokenType.StringStart, undefined);
-        object[key] = sv;
+        setObjectProperty(object, key, sv);
         break;
       }
       case StateEnum.InString:
@@ -273,15 +287,17 @@ class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
       }
       case StateEnum.InObjectExpectingValue: {
         const [key, object] = state.value;
+        let expectedState: State = state;
         if (type !== JsonTokenType.StringStart) {
           this.stateStack.pop();
-          this.stateStack.push({
+          expectedState = {
             type: StateEnum.InObjectExpectingKey,
-            value: object,
-          });
+            value: [key, object],
+          };
+          this.stateStack.push(expectedState);
         }
         const v = this.progressValue(type, value);
-        object[key] = v;
+        setObjectProperty(object, key, v);
         break;
       }
       case StateEnum.InString:
@@ -308,12 +324,12 @@ class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
         break;
       case StateEnum.InObjectExpectingValue: {
         const [key, object] = parentState.value;
-        object[key] = updated;
+        setObjectProperty(object, key, updated);
         if (this.stateStack[this.stateStack.length - 1] === parentState) {
           this.stateStack.pop();
           this.stateStack.push({
             type: StateEnum.InObjectExpectingKey,
-            value: object,
+            value: [key, object],
           });
         }
         break;
@@ -323,7 +339,7 @@ class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
           this.stateStack.pop();
           this.stateStack.push({
             type: StateEnum.InObjectExpectingValue,
-            value: [updated, parentState.value],
+            value: [updated, parentState.value[1]],
           });
         }
         break;
@@ -355,10 +371,10 @@ class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
       case JsonTokenType.ObjectStart: {
         const state: InObjectExpectingKeyState = {
           type: StateEnum.InObjectExpectingKey,
-          value: {},
+          value: [undefined, {}],
         };
         this.stateStack.push(state);
-        return state.value;
+        return state.value[1];
       }
       default:
         throw new Error(
