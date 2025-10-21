@@ -49,7 +49,8 @@ The `parse` function also matches `JSON.parse`'s behavior for invalid input. If 
 ## Invariants
 
 1.  Subsequent versions of a value will have the same type. i.e. we will never
-    yield a value as a string and then later replace it with an array.
+    yield a value as a string and then later replace it with an array (unless
+    the object has repeated keys, see invariant 7).
 2.  true, false, null, and numbers are atomic, we don't yield them until
     we have the entire value.
 3.  Strings may be replaced with a longer string, with more characters (in
@@ -57,15 +58,19 @@ The `parse` function also matches `JSON.parse`'s behavior for invalid input. If 
 4.  Arrays are only modified by either appending new elements, or
     replacing/mutating the element currently at the end.
 5.  Objects are only modified by either adding new properties, or
-    replacing/mutating the most recently added property.
+    replacing/mutating the most recently added property, (except in the case of
+    repeated keys, see invariant 7).
 6.  As a consequence of 1 and 5, we only add a property to an object once we
     have the entire key and enough of the value to know that value's type.
+7.  If an object has the same key multiple times, later values take precedence
+    over earlier ones, matching the behavior of JSON.parse. This may result in
+    changing the type of a value, and mutating earlier keys in the object.
 
 ## See also
 
 The built-in JSON.parse is faster (~5x in simple benchmarking) if you don't need streaming.
 
-[stream-json](https://www.npmjs.com/package/stream-json), is larger, more complex, and slower (~10-20x slower in simple benchmarking), but it's much more featureful, and if you only need a subset of the data it can likely be much faster.
+[stream-json](https://www.npmjs.com/package/stream-json), is larger, more complex, and slower (~10-20x slower in simple benchmarking), but it's much more featureful, and if you only need a subset of the data may be faster.
 
 ## Development
 
