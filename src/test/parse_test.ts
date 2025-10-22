@@ -130,15 +130,22 @@ suite('parse', () => {
   });
 
   test('partial results', async () => {
-    const inputToOutputs = [
-      [null, [null]],
-      [true, [true]],
-      [false, [false]],
-      ['abc', ['', 'a', 'ab', 'abc']],
-      [[], [[]]],
-      [
-        ['a', 'b', 'c'],
-        [
+    interface TestCase {
+      value: unknown;
+      expectedValues: unknown[];
+    }
+    const inputToOutputs: TestCase[] = [
+      {value: null, expectedValues: [null]},
+      {value: true, expectedValues: [true]},
+      {value: false, expectedValues: [false]},
+      {
+        value: 'abc',
+        expectedValues: ['', 'a', 'ab', 'abc'],
+      },
+      {value: [], expectedValues: [[]]},
+      {
+        value: ['a', 'b', 'c'],
+        expectedValues: [
           [],
           [''],
           ['a'],
@@ -147,10 +154,15 @@ suite('parse', () => {
           ['a', 'b', ''],
           ['a', 'b', 'c'],
         ],
-      ],
-      [
-        {greeting: 'hi!', name: 'G'},
-        [
+      },
+      {
+        value: [null],
+        expectedValues: [[], [null]],
+      },
+
+      {
+        value: {greeting: 'hi!', name: 'G'},
+        expectedValues: [
           {},
           {greeting: ''},
           {greeting: 'h'},
@@ -159,10 +171,10 @@ suite('parse', () => {
           {greeting: 'hi!', name: ''},
           {greeting: 'hi!', name: 'G'},
         ],
-      ],
-      [
-        {a: ['a', {b: ['c']}]},
-        [
+      },
+      {
+        value: {a: ['a', {b: ['c']}]},
+        expectedValues: [
           {},
           {a: []},
           {a: ['']},
@@ -172,17 +184,17 @@ suite('parse', () => {
           {a: ['a', {b: ['']}]},
           {a: ['a', {b: ['c']}]},
         ],
-      ],
+      },
     ];
-    for (const [val, expectedVals] of inputToOutputs) {
-      const stringStream = makeStreamOfChunks(JSON.stringify(val), 1);
+    for (const {value, expectedValues} of inputToOutputs) {
+      const stringStream = makeStreamOfChunks(JSON.stringify(value), 1);
       const partialValues = await toArray(
         mapStructuralClone(parse(stringStream)),
       );
       assert.deepEqual(
         partialValues,
-        expectedVals as unknown,
-        `Parsing ${JSON.stringify(val)}`,
+        expectedValues as unknown,
+        `Parsing ${JSON.stringify(value)}`,
       );
     }
   });
@@ -218,5 +230,10 @@ suite('parse', () => {
       current = current[0];
     }
     assert.equal(current, 1, 'At max depth, should reach value 1');
+  });
+
+  test('Object key regression test', async () => {
+    await assertSameAsJsonParse('__proto__', '{"__proto__":""}', true);
+    await assertSameAsJsonParse('toString', '{"toString":null}', true);
   });
 });

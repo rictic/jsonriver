@@ -40,6 +40,7 @@
     "@typescript-eslint/parser": "^7.0.1",
     "esbuild": "^0.25.4",
     "eslint": "^8.48.0",
+    "fast-check": "^4.3.0",
     "np": "^10.0.7",
     "prettier": "^3.3.3",
     "tachometer": "^0.7.1",
