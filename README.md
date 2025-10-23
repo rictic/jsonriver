@@ -66,6 +66,63 @@ The `parse` function also matches `JSON.parse`'s behavior for invalid input. If 
     over earlier ones, matching the behavior of JSON.parse. This may result in
     changing the type of a value, and mutating earlier keys in the object.
 
+## Complete Values
+
+The parse function takes an optional set of options object as its second parameter. If the options object has a `completeCallback` function, that function will be called like `completeCallback(value, path)` each time the parser has finished with a value. Given the json:
+
+```json
+{"name": "Alex", "keys": [1, 20, 300]}
+```
+
+`completeCallback` will be called six times, with the following values:
+
+```js
+'Alex'
+1
+20
+300
+[1, 20, 300]
+{"name": "Alex", "keys": [1, 20, 300]}
+```
+
+It is also given a `path`, describing where the newly complete value is in relation to the toplevel parsed value. So for the above example, the paths are:
+
+```js
+['name']     // `'Alex'` is in the 'keys' property on a toplevel object
+['keys', 0]  // `1` is at index 0 in the array on the 'keys' prop
+['keys', 1]  // `20` is at index 1 on that array
+['keys', 2]  // `300` is at 2
+['keys']     // the array is complete, and found on the 'keys' property
+[]           // finally, the toplevel object is complete
+```
+
+This information is constructed lazily, so that you only pay for it if you use it. As a result, `completeCallback` must call `path.segments()` synchronously.
+
+### Completions Recipe
+
+A simple and low overhead way to handle completion is with a WeakMap:
+
+```js
+const completed = new WeakMap();
+function markCompleted(value) {
+  if (value && typeof value === 'object') {
+    completed.set(value, true);
+  }
+}
+function isComplete(value) {
+  if (value && typeof value === 'object') {
+    return completed.has(value);
+  }
+}
+
+const values = parse(stream, {completeCallback: markCompleted});
+for await (const value of values) {
+  // the render function can use the isComplete function to check whether
+  // an object or array is complete
+  render(value, isComplete);
+}
+```
+
 ## See also
 
 The built-in JSON.parse is faster (~5x in simple benchmarking) if you don't need streaming.

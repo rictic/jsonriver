@@ -216,8 +216,10 @@ suite('parse', () => {
       const actualCompleteValues: Array<[unknown, Array<string | number>]> = [];
       const partialValues = await toArray(
         mapStructuralClone(
-          parse(stringStream, (info) => {
-            actualCompleteValues.push([info.value, [...info.pathSegments]]);
+          parse(stringStream, {
+            completeCallback(value, path) {
+              actualCompleteValues.push([value, [...path.segments()]]);
+            },
           }),
         ),
       );

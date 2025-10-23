@@ -35,29 +35,83 @@ import {
  *
  * The following invariants will also be maintained:
  *
- * 1. Future versions of a value will have the same type. i.e. we will never
- *    yield a value as a string and then later replace it with an array.
- * 2. true, false, null, and numbers are atomic, we don't yield them until
- *    we have the entire value.
- * 3. Strings may be replaced with a longer string, with more characters (in
- *    the JavaScript sense) appended.
- * 4. Arrays are only modified by either appending new elements, or
- *    replacing/mutating the element currently at the end.
- * 5. Objects are only modified by either adding new properties, or
- *    replacing/mutating the most recently added property.
- * 6. As a consequence of 1 and 5, we only add a property to an object once we
- *    have the entire key and enough of the value to know that value's type.
+ * 1.  Subsequent versions of a value will have the same type. i.e. we will *
+ *     never yield a value as a string and then later replace it with an array
+ *     (unless the object has repeated keys, see invariant 7).
+ * 2.  true, false, null, and numbers are atomic, we don't yield them until
+ *     we have the entire value.
+ * 3.  Strings may be replaced with a longer string, with more characters (in
+ *     the JavaScript sense) appended.
+ * 4.  Arrays are only modified by either appending new elements, or
+ *     replacing/mutating the element currently at the end.
+ * 5.  Objects are only modified by either adding new properties, or
+ *     replacing/mutating the most recently added property, (except in the case
+ *     of repeated keys, see invariant 7).
+ * 6.  As a consequence of 1 and 5, we only add a property to an object once we
+ *     have the entire key and enough of the value to know that value's type.
+ * 7.  If an object has the same key multiple times, later values take
+ *     precedence over earlier ones, matching the behavior of JSON.parse. This
+ *     may result in changing the type of a value, and mutating earlier keys in
+ *     the object.
  */
 export async function* parse(
   stream: AsyncIterable<string>,
-  completeCallback?: (info: ValueComplete) => void,
+  options?: Options,
 ): AsyncIterableIterator<JsonValue> {
-  yield* new Parser(stream, completeCallback);
+  yield* new Parser(stream, options?.completeCallback);
 }
 
-interface ValueComplete {
-  value: JsonValue;
-  pathSegments: Array<string | number>;
+interface Options {
+  /**
+   * A callback that's called with each value once that value is complete. It
+   * will also be given information about the path to each
+   * completed value.
+   *
+   * For example, when parsing this JSON:
+   * ```json
+   *     {"name": "Alex", "keys": [1, 20, 300]}
+   * ```
+   *
+   * The complete callback will be called with the following values, in this
+   * order:
+   *
+   * ```js
+   *     "Alex"
+   *     1
+   *     20
+   *     300
+   *     [1, 20, 300]
+   *     {"name": "Alex", "keys": [1, 20, 300]}
+   * ```
+   *
+   * And the path segments would be:
+   *
+   * ```js
+   *     ['name']     // the 'keys' property on a toplevel object
+   *     ['keys', 0]  // the 0th item in the array on the 'keys' prop
+   *     ['keys', 1]  // the 1st item on that array
+   *     ['keys', 2]  // the 2nd
+   *     ['keys']     // the 'keys' property is now complete
+   *     []           // finally, the toplevel value is complete
+   * ```
+   */
+  completeCallback?: (value: JsonValue, path: Path) => void;
+}
+
+/**
+ * The path of a complete value inside the toplevel parsed value.
+ *
+ * Note that Path values may be reused between calls to the complete callback.
+ */
+interface Path {
+  /**
+   * Constructs an array of the path to the most recently completed value.
+   *
+   * This method should be called synchronously when the completeCallback is
+   * called, as the segments array is created lazily on demand based on the
+   * parser's internal state.
+   */
+  segments(): Array<string | number>;
 }
 
 export type JsonValue =
@@ -116,24 +170,22 @@ interface InObjectExpectingValueState {
   value: [key: string, object: JsonObject];
 }
 
-class CompleteValueInfo {
-  private readonly stateStack: readonly State[];
-  value: JsonValue;
-
-  constructor(stateStack: State[]) {
-    this.stateStack = stateStack;
-    this.value = null;
+const privateStateStackSymbol = Symbol('stateStack');
+class CompleteValueInfo implements Path {
+  private readonly [privateStateStackSymbol]: readonly State[];
+  constructor(actualStateStack: State[]) {
+    this[privateStateStackSymbol] = actualStateStack;
   }
 
-  get pathSegments(): Array<string | number> {
+  segments(): Array<string | number> {
     const result = [];
-    for (let i = 0; i < this.stateStack.length; i++) {
-      const state = this.stateStack[i]!;
+    for (let i = 0; i < this[privateStateStackSymbol].length; i++) {
+      const state = this[privateStateStackSymbol][i]!;
       switch (state.type) {
         case StateEnum.InString:
         case StateEnum.Initial:
           throw new Error(
-            `Impossible condition, in state ${JSON.stringify(state)} with current value ${JSON.stringify(this.value)}`,
+            `path.segments() was called with unexpected parser state. Called asynchronously?`,
           );
         case StateEnum.InObjectExpectingKey:
           if (state.value[0] !== undefined) {
@@ -164,12 +216,12 @@ class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
   readonly tokenizer: Tokenizer;
   private finished = false;
   private progressed = false;
-  private completeCallback: ((info: ValueComplete) => void) | undefined;
+  private completeCallback: Options['completeCallback'];
   private readonly completeValueInfo: CompleteValueInfo;
 
   constructor(
     textStream: AsyncIterable<string>,
-    completeCallback?: (info: ValueComplete) => void,
+    completeCallback?: Options['completeCallback'],
   ) {
     this.completeCallback = completeCallback;
     this.completeValueInfo = new CompleteValueInfo(this.stateStack);
@@ -296,8 +348,7 @@ class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
     }
     this.stateStack.pop();
     if (this.completeCallback !== undefined) {
-      this.completeValueInfo.value = state.value;
-      this.completeCallback(this.completeValueInfo);
+      this.completeCallback(state.value, this.completeValueInfo);
     }
   }
 
@@ -312,8 +363,7 @@ class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
       case StateEnum.InObjectExpectingValue:
         this.stateStack.pop();
         if (this.completeCallback !== undefined) {
-          this.completeValueInfo.value = state.value[1];
-          this.completeCallback(this.completeValueInfo);
+          this.completeCallback(state.value[1], this.completeValueInfo);
         }
         break;
       default:
@@ -344,8 +394,7 @@ class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
           this.completeCallback !== undefined &&
           this.stateStack.length === 0
         ) {
-          this.completeValueInfo.value = this.toplevelValue;
-          this.completeCallback(this.completeValueInfo);
+          this.completeCallback(this.toplevelValue, this.completeValueInfo);
         }
         break;
       case StateEnum.InArray: {
@@ -355,8 +404,7 @@ class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
           this.completeCallback !== undefined &&
           this.stateStack[this.stateStack.length - 1] === state
         ) {
-          this.completeValueInfo.value = v;
-          this.completeCallback(this.completeValueInfo);
+          this.completeCallback(v, this.completeValueInfo);
         }
         break;
       }
@@ -377,8 +425,7 @@ class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
           this.completeCallback !== undefined &&
           this.stateStack[this.stateStack.length - 1] === expectedState
         ) {
-          this.completeValueInfo.value = v;
-          this.completeCallback(this.completeValueInfo);
+          this.completeCallback(v, this.completeValueInfo);
         }
         break;
       }
@@ -402,23 +449,20 @@ class Parser implements AsyncIterableIterator<JsonValue>, TokenHandler {
       case undefined:
         this.toplevelValue = updated;
         if (isFinal && this.completeCallback !== undefined) {
-          this.completeValueInfo.value = updated;
-          this.completeCallback(this.completeValueInfo);
+          this.completeCallback(updated, this.completeValueInfo);
         }
         break;
       case StateEnum.InArray:
         parentState.value[parentState.value.length - 1] = updated;
         if (isFinal && this.completeCallback !== undefined) {
-          this.completeValueInfo.value = updated;
-          this.completeCallback(this.completeValueInfo);
+          this.completeCallback(updated, this.completeValueInfo);
         }
         break;
       case StateEnum.InObjectExpectingValue: {
         const [key, object] = parentState.value;
         setObjectProperty(object, key, updated);
         if (isFinal && this.completeCallback !== undefined) {
-          this.completeValueInfo.value = updated;
-          this.completeCallback(this.completeValueInfo);
+          this.completeCallback(updated, this.completeValueInfo);
         }
         if (this.stateStack[this.stateStack.length - 1] === parentState) {
           this.stateStack.pop();
