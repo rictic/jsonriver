@@ -7,7 +7,8 @@ jsonriver is small, fast, has no dependencies, and uses only standard features o
 Usage:
 
 ```js
-// Richer example at examples/fetch.js
+// Richer example at examples/fetch.js and live demos at
+// https://rictic.github.io/jsonriver/
 import {parse} from 'jsonriver';
 
 const response = await fetch(`https://jsonplaceholder.typicode.com/posts`);
