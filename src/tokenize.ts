@@ -596,6 +596,12 @@ class Input {
    * Returns false if the stream is exhausted.
    */
   async tryToExpandBuffer() {
+    if (this.bufferComplete) {
+      if (this.moreContentExpected) {
+        throw new Error('Unexpected end of content');
+      }
+      return false;
+    }
     const result = await this.stream.next();
     if (result.done) {
       this.bufferComplete = true;

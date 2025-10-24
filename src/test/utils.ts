@@ -7,21 +7,49 @@
 import * as assert from 'node:assert/strict';
 import {parse} from '../index.js';
 
-export async function* makeStream(...chunks: string[]): AsyncIterable<string> {
-  for (const chunk of chunks) {
-    yield chunk;
+class StreamReaderPolitenessChecker<T> implements AsyncIterableIterator<T> {
+  private readonly wrapped: AsyncIterableIterator<T>;
+  private isDone = false;
+
+  constructor(wrapped: AsyncIterableIterator<T>) {
+    this.wrapped = wrapped;
   }
-  await void 0;
+
+  [Symbol.asyncIterator](): AsyncIterableIterator<T> {
+    return this;
+  }
+  async next(...[value]: [] | [any]): Promise<IteratorResult<T, any>> {
+    if (this.isDone) {
+      throw new Error('Asked for .next() after done.');
+    }
+    const result = await this.wrapped.next(value);
+    if (result.done) {
+      this.isDone = true;
+    }
+    return result;
+  }
+}
+
+export function makeStream(...chunks: string[]): AsyncIterable<string> {
+  const stream = (async function* () {
+    for (const chunk of chunks) {
+      yield chunk;
+    }
+    await void 0;
+  })();
+  return new StreamReaderPolitenessChecker(stream);
 }
 
 export function* makeStreams(val: string) {
   // The stream where we yield the entire input as one chunk
   yield {
     name: 'all at once',
-    stream: (async function* () {
-      yield val;
-      await void 0;
-    })(),
+    stream: new StreamReaderPolitenessChecker(
+      (async function* () {
+        yield val;
+        await void 0;
+      })(),
+    ),
   };
 
   for (let chunkSize = 1; chunkSize < val.length; chunkSize++) {
@@ -32,16 +60,17 @@ export function* makeStreams(val: string) {
   }
 }
 
-export async function* makeStreamOfChunks(
+export function makeStreamOfChunks(
   val: string,
   chunkSize: number,
 ): AsyncIterable<string> {
+  const chunks = [];
   let remaining = val;
   while (remaining.length > 0) {
-    yield remaining.slice(0, chunkSize);
+    chunks.push(remaining.slice(0, chunkSize));
     remaining = remaining.slice(chunkSize);
   }
-  await void 0;
+  return makeStream(...chunks);
 }
 
 export async function toArray<T>(iter: AsyncIterable<T>): Promise<T[]> {
