@@ -18,11 +18,11 @@ class StreamReaderPolitenessChecker<T> implements AsyncIterableIterator<T> {
   [Symbol.asyncIterator](): AsyncIterableIterator<T> {
     return this;
   }
-  async next(...[value]: [] | [any]): Promise<IteratorResult<T, any>> {
+  async next(): Promise<IteratorResult<T>> {
     if (this.isDone) {
       throw new Error('Asked for .next() after done.');
     }
-    const result = await this.wrapped.next(value);
+    const result = await this.wrapped.next();
     if (result.done) {
       this.isDone = true;
     }
