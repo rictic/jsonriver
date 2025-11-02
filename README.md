@@ -7,7 +7,8 @@ jsonriver is small, fast, has no dependencies, and uses only standard features o
 Usage:
 
 ```js
-// Richer example at examples/fetch.js
+// Richer example at examples/fetch.js and live demos at
+// https://rictic.github.io/jsonriver/
 import {parse} from 'jsonriver';
 
 const response = await fetch(`https://jsonplaceholder.typicode.com/posts`);
@@ -55,16 +56,83 @@ The `parse` function also matches `JSON.parse`'s behavior for invalid input. If 
     we have the entire value.
 3.  Strings may be replaced with a longer string, with more characters (in
     the JavaScript sense) appended.
-4.  Arrays are only modified by either appending new elements, or
+4.  Arrays are modified only by appending new elements, or
     replacing/mutating the element currently at the end.
 5.  Objects are only modified by either adding new properties, or
     replacing/mutating the most recently added property, (except in the case of
     repeated keys, see invariant 7).
 6.  As a consequence of 1 and 5, we only add a property to an object once we
     have the entire key and enough of the value to know that value's type.
-7.  If an object has the same key multiple times, later values take precedence
-    over earlier ones, matching the behavior of JSON.parse. This may result in
-    changing the type of a value, and mutating earlier keys in the object.
+7.  If an object has the same key multiple times, later values take
+    precedence over earlier ones, matching the behavior of JSON.parse. This
+    may result in changing the type of a value, and setting earlier keys
+    the object.
+
+## Complete Values
+
+The parse function can be passed an options argument as its second parameter. If the options object has a `completeCallback` function, that function will be called like `completeCallback(value, path)` each time the parser has finished with a value.
+
+Formally, a value is complete when jsonriver will not mutate it again, nor
+replace it with a different value, except for the unusual case of a
+repeated key in an object (see invariant 7 in the parse() docs).
+
+The calls that jsonriver makes to a `completeCallback` are deterministic,
+regardless of how the incoming JSON streams in.
+
+For example, when parsing this JSON:
+
+```json
+{"name": "Alex", "keys": [1, 20, 300]}
+```
+
+`completeCallback` will be called six times, with the following values:
+
+```js
+'Alex'
+1
+20
+300
+[1, 20, 300]
+{"name": "Alex", "keys": [1, 20, 300]}
+```
+
+It is also given a `path`, describing where the newly complete value is in relation to the toplevel parsed value. So for the above example, the paths are:
+
+```js
+['name']     // `'Alex'` is in the 'keys' property on a toplevel object
+['keys', 0]  // `1` is at index 0 in the array on the 'keys' prop
+['keys', 1]  // `20` is at index 1 on that array
+['keys', 2]  // `300` is at 2
+['keys']     // the array is complete, and found on the 'keys' property
+[]           // finally, the toplevel object is complete
+```
+
+This information is constructed lazily, so that you only pay for it if you use it. As a result, `completeCallback` must call `path.segments()` synchronously.
+
+### Completions Recipe
+
+A simple and low overhead way to handle completion information is with a WeakMap:
+
+```js
+const completed = new WeakMap();
+function markCompleted(value) {
+  if (value && typeof value === 'object') {
+    completed.set(value, true);
+  }
+}
+function isComplete(value) {
+  if (value && typeof value === 'object') {
+    return completed.has(value);
+  }
+}
+
+const values = parse(stream, {completeCallback: markCompleted});
+for await (const value of values) {
+  // the render function can use the isComplete function to check whether
+  // an object or array is complete
+  render(value, isComplete);
+}
+```
 
 ## See also
 

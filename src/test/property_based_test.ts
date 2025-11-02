@@ -29,19 +29,37 @@ if (shouldTestHarder) {
 suite('property based tests', () => {
   test('valid json parses same as JSON.parse', async () => {
     return fc.assert(
-      fc.asyncProperty(fc.json(), async (json) => {
-        await assertSameAsJsonParse(json, JSON.stringify(json), true);
-        return true;
-      }),
+      fc.asyncProperty(
+        fc.json(),
+        fc.integer({min: 1, max: 100}),
+        async (json, chunkSize) => {
+          await assertSameAsJsonParse(
+            json,
+            JSON.stringify(json),
+            true,
+            chunkSize,
+          );
+          return true;
+        },
+      ),
     );
   });
 
   test('arbitrary strings parse the same', async () => {
     return fc.assert(
-      fc.asyncProperty(fc.string(), async (json) => {
-        await assertSameAsJsonParse(json, JSON.stringify(json), undefined);
-        return true;
-      }),
+      fc.asyncProperty(
+        fc.string(),
+        fc.integer({min: 1, max: 100}),
+        async (json, chunkSize) => {
+          await assertSameAsJsonParse(
+            json,
+            JSON.stringify(json),
+            undefined,
+            chunkSize,
+          );
+          return true;
+        },
+      ),
     );
   });
 
@@ -121,6 +139,74 @@ suite('property based tests', () => {
     );
   });
 
+  function completeValues(
+    value: unknown,
+  ): Array<[unknown, Array<string | number>]> {
+    if (
+      typeof value === 'boolean' ||
+      typeof value === 'number' ||
+      typeof value === 'string' ||
+      value === null
+    ) {
+      return [[value, []]];
+    }
+    if (Array.isArray(value)) {
+      const result: Array<[unknown, Array<string | number>]> = [];
+      for (let i = 0; i < value.length; i++) {
+        const itemValues = completeValues(value[i]);
+        for (let j = 0; j < itemValues.length; j++) {
+          const [itemValue, itemPath] = itemValues[j]!;
+          result.push([itemValue, [i, ...itemPath]]);
+        }
+      }
+      result.push([value, []]);
+      return result;
+    }
+    if (typeof value !== 'object' || value === null) {
+      throw new Error(`Unexpected value type: ${typeof value}`);
+    }
+
+    const result: Array<[unknown, Array<string | number>]> = [];
+    for (const [key, val] of Object.entries(value)) {
+      const itemValues = completeValues(val);
+      for (let j = 0; j < itemValues.length; j++) {
+        const [itemValue, itemPath] = itemValues[j]!;
+        result.push([itemValue, [key, ...itemPath]]);
+      }
+    }
+    result.push([value, []]);
+    return result;
+  }
+
+  test('we are called for complete values as expected', async () => {
+    return fc.assert(
+      fc.asyncProperty(
+        jsonValue,
+        fc.integer({min: 1, max: 100}),
+        async (value: unknown, chunkSize) => {
+          const stringStream = makeStreamOfChunks(
+            JSON.stringify(value),
+            chunkSize,
+          );
+          const actualCompleteValues: Array<[unknown, Array<string | number>]> =
+            [];
+          await toArray(
+            parse(stringStream, {
+              completeCallback(value, path) {
+                actualCompleteValues.push([value, [...path.segments()]]);
+              },
+            }),
+          );
+          assert.deepEqual(
+            actualCompleteValues,
+            completeValues(JSON.parse(JSON.stringify(value))),
+            `Complete values when parsing ${JSON.stringify(value)}}`,
+          );
+        },
+      ),
+    );
+  });
+
   test('strings only grow', async () => {
     // check the invariant
     function check(prev: unknown, curr: unknown) {
@@ -162,19 +248,23 @@ suite('property based tests', () => {
     }
 
     return fc.assert(
-      fc.asyncProperty(jsonValue, async (value: unknown) => {
-        const jsonString = JSON.stringify(value);
-        const stringStream = makeStreamOfChunks(jsonString, 1);
-        let previous: unknown = undefined;
-        for await (const next of parse(stringStream)) {
-          if (previous === undefined) {
+      fc.asyncProperty(
+        jsonValue,
+        fc.integer({min: 1, max: 100}),
+        async (value: unknown, chunkSize) => {
+          const jsonString = JSON.stringify(value);
+          const stringStream = makeStreamOfChunks(jsonString, chunkSize);
+          let previous: unknown = undefined;
+          for await (const next of parse(stringStream)) {
+            if (previous === undefined) {
+              previous = structuredClone(next);
+              continue;
+            }
+            check(previous, next);
             previous = structuredClone(next);
-            continue;
           }
-          check(previous, next);
-          previous = structuredClone(next);
-        }
-      }),
+        },
+      ),
     );
   });
 
@@ -182,9 +272,13 @@ suite('property based tests', () => {
     return fc.assert(
       fc.asyncProperty(
         fc.oneof(fc.constant(null), fc.boolean(), fc.double()),
-        async (value: unknown) => {
+        fc.integer({
+          min: 1,
+          max: 100,
+        }),
+        async (value: unknown, chunkSize) => {
           const jsonString = JSON.stringify(value);
-          const stringStream = makeStreamOfChunks(jsonString, 1);
+          const stringStream = makeStreamOfChunks(jsonString, chunkSize);
           const partialValues = await toArray(
             mapStructuralClone(parse(stringStream)),
           );
@@ -197,15 +291,24 @@ suite('property based tests', () => {
   test('objects with arbitrary keys', async () => {
     const keyValuePairs = fc.array(fc.tuple(fc.string(), jsonValue));
     return fc.assert(
-      fc.asyncProperty(keyValuePairs, async (entries) => {
-        const jsonString =
-          '{' +
-          entries
-            .map(([k, v]) => `${JSON.stringify(k)}:${JSON.stringify(v)}`)
-            .join(',') +
-          '}';
-        await assertSameAsJsonParse('Randomly', jsonString, undefined);
-      }),
+      fc.asyncProperty(
+        keyValuePairs,
+        fc.integer({min: 1, max: 100}),
+        async (entries, chunkSize) => {
+          const jsonString =
+            '{' +
+            entries
+              .map(([k, v]) => `${JSON.stringify(k)}:${JSON.stringify(v)}`)
+              .join(',') +
+            '}';
+          await assertSameAsJsonParse(
+            'Randomly',
+            jsonString,
+            undefined,
+            chunkSize,
+          );
+        },
+      ),
     );
   });
 
@@ -214,19 +317,24 @@ suite('property based tests', () => {
       minLength: 1,
     });
     return fc.assert(
-      fc.asyncProperty(keyValuePairs, async (entries) => {
-        const jsonString =
-          '{' +
-          [...entries, ...entries]
-            .map(([k, v]) => `${JSON.stringify(k)}:${JSON.stringify(v)}`)
-            .join(',') +
-          '}';
-        await assertSameAsJsonParse(
-          'Randomly generated',
-          jsonString,
-          undefined,
-        );
-      }),
+      fc.asyncProperty(
+        keyValuePairs,
+        fc.integer({min: 1, max: 100}),
+        async (entries, chunkSize) => {
+          const jsonString =
+            '{' +
+            [...entries, ...entries]
+              .map(([k, v]) => `${JSON.stringify(k)}:${JSON.stringify(v)}`)
+              .join(',') +
+            '}';
+          await assertSameAsJsonParse(
+            'Randomly generated',
+            jsonString,
+            undefined,
+            chunkSize,
+          );
+        },
+      ),
     );
   });
 });

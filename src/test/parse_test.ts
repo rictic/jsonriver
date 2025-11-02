@@ -133,16 +133,18 @@ suite('parse', () => {
     interface TestCase {
       value: unknown;
       expectedValues: unknown[];
+      completeValues: Array<[unknown, Array<string | number>]>;
     }
     const inputToOutputs: TestCase[] = [
-      {value: null, expectedValues: [null]},
-      {value: true, expectedValues: [true]},
-      {value: false, expectedValues: [false]},
+      {value: null, expectedValues: [null], completeValues: [[null, []]]},
+      {value: true, expectedValues: [true], completeValues: [[true, []]]},
+      {value: false, expectedValues: [false], completeValues: [[false, []]]},
       {
         value: 'abc',
         expectedValues: ['', 'a', 'ab', 'abc'],
+        completeValues: [['abc', []]],
       },
-      {value: [], expectedValues: [[]]},
+      {value: [], expectedValues: [[]], completeValues: [[[], []]]},
       {
         value: ['a', 'b', 'c'],
         expectedValues: [
@@ -154,10 +156,20 @@ suite('parse', () => {
           ['a', 'b', ''],
           ['a', 'b', 'c'],
         ],
+        completeValues: [
+          ['a', [0]],
+          ['b', [1]],
+          ['c', [2]],
+          [['a', 'b', 'c'], []],
+        ],
       },
       {
         value: [null],
         expectedValues: [[], [null]],
+        completeValues: [
+          [null, [0]],
+          [[null], []],
+        ],
       },
 
       {
@@ -170,6 +182,11 @@ suite('parse', () => {
           {greeting: 'hi!'},
           {greeting: 'hi!', name: ''},
           {greeting: 'hi!', name: 'G'},
+        ],
+        completeValues: [
+          ['hi!', ['greeting']],
+          ['G', ['name']],
+          [{greeting: 'hi!', name: 'G'}, []],
         ],
       },
       {
@@ -184,17 +201,37 @@ suite('parse', () => {
           {a: ['a', {b: ['']}]},
           {a: ['a', {b: ['c']}]},
         ],
+        completeValues: [
+          ['a', ['a', 0]],
+          ['c', ['a', 1, 'b', 0]],
+          [['c'], ['a', 1, 'b']],
+          [{b: ['c']}, ['a', 1]],
+          [['a', {b: ['c']}], ['a']],
+          [{a: ['a', {b: ['c']}]}, []],
+        ],
       },
     ];
-    for (const {value, expectedValues} of inputToOutputs) {
+    for (const {value, expectedValues, completeValues} of inputToOutputs) {
       const stringStream = makeStreamOfChunks(JSON.stringify(value), 1);
+      const actualCompleteValues: Array<[unknown, Array<string | number>]> = [];
       const partialValues = await toArray(
-        mapStructuralClone(parse(stringStream)),
+        mapStructuralClone(
+          parse(stringStream, {
+            completeCallback(value, path) {
+              actualCompleteValues.push([value, [...path.segments()]]);
+            },
+          }),
+        ),
       );
       assert.deepEqual(
         partialValues,
         expectedValues as unknown,
         `Parsing ${JSON.stringify(value)}`,
+      );
+      assert.deepEqual(
+        actualCompleteValues,
+        completeValues,
+        `Complete values when parsing ${JSON.stringify(value)}}`,
       );
     }
   });

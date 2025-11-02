@@ -118,9 +118,12 @@ export async function assertRoundTrips(jsonValue: unknown) {
   }
 }
 
-export async function emulatedJsonParse(json: string) {
+export async function emulatedJsonParse(json: string, chunkSize?: number) {
   let finalValue;
-  for await (const value of parse(makeStream(json))) {
+  const stream = chunkSize
+    ? makeStreamOfChunks(json, chunkSize)
+    : makeStream(json);
+  for await (const value of parse(stream)) {
     finalValue = value;
   }
   return finalValue;
@@ -130,6 +133,7 @@ export async function assertSameAsJsonParse(
   name: string,
   json: string,
   shouldSucceed: boolean | undefined,
+  chunkSize?: number,
 ) {
   let expected;
   let expectedError = null;
@@ -142,7 +146,7 @@ export async function assertSameAsJsonParse(
   let actual;
   let actualError = null;
   try {
-    actual = {success: true, value: await emulatedJsonParse(json)};
+    actual = {success: true, value: await emulatedJsonParse(json, chunkSize)};
   } catch (e) {
     actual = {success: false};
     actualError = e;
