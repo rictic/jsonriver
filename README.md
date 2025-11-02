@@ -56,20 +56,30 @@ The `parse` function also matches `JSON.parse`'s behavior for invalid input. If 
     we have the entire value.
 3.  Strings may be replaced with a longer string, with more characters (in
     the JavaScript sense) appended.
-4.  Arrays are only modified by either appending new elements, or
+4.  Arrays are modified only by appending new elements, or
     replacing/mutating the element currently at the end.
 5.  Objects are only modified by either adding new properties, or
     replacing/mutating the most recently added property, (except in the case of
     repeated keys, see invariant 7).
 6.  As a consequence of 1 and 5, we only add a property to an object once we
     have the entire key and enough of the value to know that value's type.
-7.  If an object has the same key multiple times, later values take precedence
-    over earlier ones, matching the behavior of JSON.parse. This may result in
-    changing the type of a value, and mutating earlier keys in the object.
+7.  If an object has the same key multiple times, later values take
+    precedence over earlier ones, matching the behavior of JSON.parse. This
+    may result in changing the type of a value, and setting earlier keys
+    the object.
 
 ## Complete Values
 
-The parse function takes an optional set of options object as its second parameter. If the options object has a `completeCallback` function, that function will be called like `completeCallback(value, path)` each time the parser has finished with a value. Given the json:
+The parse function can be passed an options argument as its second parameter. If the options object has a `completeCallback` function, that function will be called like `completeCallback(value, path)` each time the parser has finished with a value.
+
+Formally, a value is complete when jsonriver will not mutate it again, nor
+replace it with a different value, except for the unusual case of a
+repeated key in an object (see invariant 7 in the parse() docs).
+
+The calls that jsonriver makes to a `completeCallback` are deterministic,
+regardless of how the incoming JSON streams in.
+
+For example, when parsing this JSON:
 
 ```json
 {"name": "Alex", "keys": [1, 20, 300]}
@@ -101,7 +111,7 @@ This information is constructed lazily, so that you only pay for it if you use i
 
 ### Completions Recipe
 
-A simple and low overhead way to handle completion is with a WeakMap:
+A simple and low overhead way to handle completion information is with a WeakMap:
 
 ```js
 const completed = new WeakMap();

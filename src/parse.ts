@@ -35,14 +35,14 @@ import {
  *
  * The following invariants will also be maintained:
  *
- * 1.  Subsequent versions of a value will have the same type. i.e. we will *
+ * 1.  Subsequent versions of a value will have the same type. i.e. we will
  *     never yield a value as a string and then later replace it with an array
  *     (unless the object has repeated keys, see invariant 7).
  * 2.  true, false, null, and numbers are atomic, we don't yield them until
  *     we have the entire value.
  * 3.  Strings may be replaced with a longer string, with more characters (in
  *     the JavaScript sense) appended.
- * 4.  Arrays are only modified by either appending new elements, or
+ * 4.  Arrays are modified only by appending new elements or
  *     replacing/mutating the element currently at the end.
  * 5.  Objects are only modified by either adding new properties, or
  *     replacing/mutating the most recently added property, (except in the case
@@ -51,7 +51,7 @@ import {
  *     have the entire key and enough of the value to know that value's type.
  * 7.  If an object has the same key multiple times, later values take
  *     precedence over earlier ones, matching the behavior of JSON.parse. This
- *     may result in changing the type of a value, and mutating earlier keys in
+ *     may result in changing the type of a value, and setting earlier keys
  *     the object.
  */
 export async function* parse(
@@ -66,14 +66,20 @@ interface Options {
    * A callback that's called with each value once that value is complete. It
    * will also be given information about the path to each
    * completed value.
+  *
+  * The calls that jsonriver makes to a `completeCallback` are deterministic,
+  * regardless of how the incoming JSON streams in.
+   *
+   * Formally, a value is complete when jsonriver will not mutate it again, nor
+   * replace it with a different value, except for the unusual case of a
+   * repeated key in an object (see invariant 7 in the parse() docs).
    *
    * For example, when parsing this JSON:
    * ```json
    *     {"name": "Alex", "keys": [1, 20, 300]}
    * ```
    *
-   * The complete callback will be called with the following values, in this
-   * order:
+   * The complete callback will be called six times, with the following values:
    *
    * ```js
    *     "Alex"
