@@ -66,9 +66,9 @@ interface Options {
    * A callback that's called with each value once that value is complete. It
    * will also be given information about the path to each
    * completed value.
-  *
-  * The calls that jsonriver makes to a `completeCallback` are deterministic,
-  * regardless of how the incoming JSON streams in.
+   *
+   * The calls that jsonriver makes to a `completeCallback` are deterministic,
+   * regardless of how the incoming JSON streams in.
    *
    * Formally, a value is complete when jsonriver will not mutate it again, nor
    * replace it with a different value, except for the unusual case of a
