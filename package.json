@@ -1,7 +1,7 @@
 {
   "name": "jsonriver",
   "type": "module",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "A JSON parser that produces increasingly complete versions of the parsed value.",
   "main": "dist/index.js",
   "module": "dist/index.js",
@@ -9,6 +9,7 @@
   "license": "BSD-3-Clause",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     }
   },
